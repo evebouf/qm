@@ -953,19 +953,6 @@ a.chat-row-open {
   padding-left: 6px;
 }
 
-.settings-brand-tile {
-  display: grid;
-  place-items: center;
-  width: 64px;
-  height: 64px;
-  background: var(--cta);
-  font-weight: 600;
-  line-height: 1;
-}
-.settings-brand-tile .brand-name {
-  color: var(--cta-foreground);
-  font-size: 22px;
-}
 .settings-group {
   display: flex;
   flex-direction: column;

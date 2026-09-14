@@ -1,6 +1,6 @@
 import { html, nothing, render, type TemplateResult } from "lit";
 import { BookOpen, ExternalLink, LogOut, Monitor, Moon, ShieldUser, Sun, type IconNode } from "lucide";
-import { brandName, icon } from "./ui";
+import { icon } from "./ui";
 import { ADMIN_HOME_URL, appState, can, signOut } from "./shell";
 import { sessionsState, setWebOnly } from "./sessions";
 import { errMessage } from "../../chassis/src/errors";
@@ -283,7 +283,6 @@ function settingsPane(): TemplateResult {
   return html`
     <div class="list-page-head">
       <h1 class="pane-title">Settings</h1>
-      <div class="settings-brand-tile"><span class="brand-name">${brandName()}</span></div>
     </div>
     <div class="settings-group">
       ${themeRow()} ${sidebarSurfaceRow()} ${can("admin") ? adminRow() : nothing} ${aboutRow()} ${accountRow()}
