@@ -809,6 +809,17 @@ export function contextTpl(item: InboxItem): TemplateResult | typeof nothing {
   </div>`;
 }
 
+function inboxReplyHeading(item: InboxItem): string {
+  const name = item.from
+    .replace(/<[^>]*>/g, "")
+    .replace(/["“”]/g, "")
+    .trim()
+    .split(/\s+/)[0];
+  return name && /^[\p{L}][\p{L}\p{M}’'-]{0,24}$/u.test(name)
+    ? `What should we tell ${name}?`
+    : "What should this reply say?";
+}
+
 export function chatTpl(item: InboxItem): TemplateResult {
   const history = inboxHistoryPanel(item, drawAll);
   if (history) return history;
@@ -860,7 +871,7 @@ export function chatTpl(item: InboxItem): TemplateResult {
       ${
         empty
           ? html`<div class="inbox-chat-empty">
-              <h2 class="inbox-chat-cta">What should I change?</h2>
+              <h2 class="inbox-chat-cta">${inboxReplyHeading(item)}</h2>
               <div class="inbox-chat-suggestions">
                 ${DRAFT_SUGGESTIONS.map(
                   (prompt) =>
@@ -1330,7 +1341,7 @@ function inboxAssistantHost(): HTMLElement {
   host.className = "inbox-assistant-body";
   host.dataset.density = "compact";
   let working = false;
-  let title = "New conversation";
+  let title = "";
   const prefix = `web:${appState.me?.user ?? "anon"}:inbox:`;
   const storageKey = `qm-inbox-assistant:${appState.me?.user ?? "anon"}`;
   let saved: { threadRef: string; sessionId: string | null } | null = null;
@@ -1455,7 +1466,7 @@ function inboxAssistantTitle(): string {
   const session = sessionsState.list.find((entry) =>
     state?.sessionId ? entry.id === state.sessionId : Boolean(state?.threadRef) && entry.threadRef === state?.threadRef,
   );
-  return session?.title?.trim() || "New conversation";
+  return session?.title?.trim() || "";
 }
 
 function inboxAssistantCanRestart(): boolean {

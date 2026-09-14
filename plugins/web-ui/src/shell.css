@@ -10878,9 +10878,9 @@ h3.ambient-field-label {
 .inbox-history-entry {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   width: 100%;
-  padding: 14px 8px;
+  padding: 8px;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -10896,24 +10896,14 @@ h3.ambient-field-label {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   min-width: 0;
 }
 .inbox-history-entry-title {
-  font-size: 14px;
-  font-weight: 550;
+  font-size: 13px;
+  font-weight: 400;
   line-height: 1.45;
   overflow-wrap: anywhere;
-}
-.inbox-history-preview {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 1.5;
 }
 .inbox-history-meta {
   display: flex;

@@ -42,3 +42,24 @@ export function previousInboxAssistantSessions(
     .filter((session) => session.id && session.threadRef.startsWith(prefix) && session.threadRef !== currentThread)
     .sort((a, b) => (b.lastActivityAt ?? b.createdAt) - (a.lastActivityAt ?? a.createdAt));
 }
+
+export function inboxHistoryDate(at: number, now = Date.now()): string {
+  const day = (ms: number) => {
+    const date = new Date(ms);
+    return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000;
+  };
+  const days = Math.max(0, day(now) - day(at));
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) {
+    const weeks = Math.floor(days / 7);
+    return weeks === 1 ? "A week ago" : `${weeks} weeks ago`;
+  }
+  if (days < 365) {
+    const months = Math.floor(days / 30);
+    return months === 1 ? "A month ago" : `${months} months ago`;
+  }
+  const years = Math.floor(days / 365);
+  return years === 1 ? "A year ago" : `${years} years ago`;
+}

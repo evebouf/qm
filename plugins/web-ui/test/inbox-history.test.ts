@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { previousInboxConversations } from "../src/inbox-history.ts";
+import { inboxHistoryDate, previousInboxConversations } from "../src/inbox-history.ts";
 import type { LedgerThreadMessage } from "../src/inbox.ts";
 
 const message = (
@@ -92,4 +92,19 @@ test("inbox assistant history includes only this user's saved inbox sessions, ne
     ["old", "new"],
   );
   assert.deepEqual(sessions, before);
+});
+
+test("history dates use local calendar days before grouping older conversations", () => {
+  const now = new Date(2026, 8, 13, 0, 5).getTime();
+  const at = (days: number) => new Date(2026, 8, 13 - days, 23, 55).getTime();
+  assert.equal(inboxHistoryDate(now, now), "Today");
+  assert.equal(inboxHistoryDate(now + 60_000, now), "Today");
+  assert.equal(inboxHistoryDate(at(1), now), "Yesterday");
+  assert.equal(inboxHistoryDate(at(2), now), "2 days ago");
+  assert.equal(inboxHistoryDate(at(7), now), "A week ago");
+  assert.equal(inboxHistoryDate(at(14), now), "2 weeks ago");
+  assert.equal(inboxHistoryDate(at(30), now), "A month ago");
+  assert.equal(inboxHistoryDate(at(60), now), "2 months ago");
+  assert.equal(inboxHistoryDate(at(365), now), "A year ago");
+  assert.equal(inboxHistoryDate(at(730), now), "2 years ago");
 });

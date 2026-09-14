@@ -1,11 +1,10 @@
 import { html, render } from "lit";
-import { ChevronRight } from "lucide";
 import { api, fetchTranscript, TAIL_TURNS, type CoreSession } from "./core-bridge";
 import { createConversation, disposeConversation, ensureDeliveryStream } from "./conversations";
 import type { Conversation, ConvHost } from "./conv-types";
 import { previousInboxAssistantSessions } from "./inbox-history";
 import { openSessionInto } from "./sessions";
-import { icon } from "./ui";
+import { inboxHistoryList } from "./inbox-history-list";
 import { inboxChatHeader } from "./inbox-chat-header";
 
 export function createInboxAssistantHistory(
@@ -49,7 +48,7 @@ export function createInboxAssistantHistory(
     const list = host.querySelector<HTMLElement>(".inbox-history-list");
     if (list) list.scrollTop = listScrollTop;
     [...host.querySelectorAll<HTMLButtonElement>(".inbox-history-entry")]
-      .find((button) => button.dataset.session === id)
+      .find((button) => button.dataset.historyId === id)
       ?.focus({ preventScroll: true });
   };
   const load = async () => {
@@ -131,35 +130,19 @@ export function createInboxAssistantHistory(
         <button class="btn compact" type="button" @click=${() => void load()}>Retry</button>
       </div>`;
     if (selected) return transcriptHost;
-    return html`<div class="inbox-history-list" aria-label="Past conversations">
-      ${
-        sessions.length
-          ? sessions.map((session) => {
-              const at = session.lastActivityAt ?? session.createdAt;
-              return html`<button
-                class="inbox-history-entry"
-                type="button"
-                data-session=${session.id}
-                @click=${() => {
-                  listScrollTop = host.querySelector<HTMLElement>(".inbox-history-list")?.scrollTop ?? 0;
-                  selected = session;
-                  void load();
-                  focusBack();
-                }}
-              >
-                <span class="inbox-history-entry-copy">
-                  <span class="inbox-history-entry-title">${session.title?.trim() || "Inbox conversation"}</span>
-                  <span class="inbox-history-meta"
-                    ><time datetime=${new Date(at).toISOString()}
-                      >${new Date(at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</time
-                    ></span
-                  > </span
-                >${icon(ChevronRight, 16)}
-              </button>`;
-            })
-          : html`<p class="inbox-history-empty">No past conversations yet.</p>`
-      }
-    </div>`;
+    return inboxHistoryList(
+      sessions.map((session) => ({
+        id: session.id,
+        title: session.title?.trim() || "Inbox conversation",
+        at: session.lastActivityAt ?? session.createdAt,
+      })),
+      (id) => {
+        listScrollTop = host.querySelector<HTMLElement>(".inbox-history-list")?.scrollTop ?? 0;
+        selected = sessions.find((session) => session.id === id) ?? null;
+        void load();
+        focusBack();
+      },
+    );
   };
   const draw = () =>
     render(
