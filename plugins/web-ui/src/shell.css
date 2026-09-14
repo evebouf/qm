@@ -10783,7 +10783,7 @@ h3.ambient-field-label {
 }
 @media (max-width: 860px) {
   .inbox-assistant-body .composer-input {
-    font-size: 16px;
+    font-size: var(--composer-font-size);
   }
   .inbox-assistant-body .composer-toolbar .send-btn {
     min-height: 44px;
