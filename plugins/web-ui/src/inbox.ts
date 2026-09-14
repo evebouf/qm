@@ -24,6 +24,8 @@ import {
 } from "./conversations";
 import type { Conversation } from "./conv-types";
 import { saveDraft } from "./drafts";
+import { inboxChatHeader } from "./inbox-chat-header";
+import { createInboxAssistantHistory } from "./inbox-assistant-history";
 import { createInboxEventCoalescer, type InboxItemRef } from "./inbox-coalesce";
 import { charForName, ensureEmojiIndex } from "./emoji-picker";
 import type { DensityTier } from "./density";
@@ -183,7 +185,10 @@ export function attachInboxSurface(surface: { redraw: () => void; visible: () =>
 }
 
 export function resetInboxState(): void {
-  if (inboxAssistant) disposeConversation(inboxAssistant.conversation);
+  if (inboxAssistant) {
+    inboxAssistant.history.dispose();
+    disposeConversation(inboxAssistant.conversation);
+  }
   inboxAssistant = null;
   inboxState.items = [];
   inboxState.loopId = null;
@@ -821,9 +826,9 @@ export function chatTpl(item: InboxItem): TemplateResult {
   const empty = thread.length === 0;
   return html`
     <div class="inbox-chat" data-inbox-item=${item.id}>
-      <div class="inbox-chat-header">
-        <span>Conversation</span>
-        <div class="inbox-chat-header-actions">
+      ${inboxChatHeader({
+        title: "Inbox assistant",
+        actions: html`
           ${
             previous.length
               ? html`
@@ -849,8 +854,8 @@ export function chatTpl(item: InboxItem): TemplateResult {
           >
             ${icon(SquarePen, 16)}
           </button>
-        </div>
-      </div>
+        `,
+      })}
       ${inboxState.notice ? html`<div class="inbox-notice" role="status">${inboxState.notice}</div>` : nothing}
       ${
         empty
@@ -1313,7 +1318,11 @@ function drawSurface(surface: InboxSurface): void {
   sizeChatInputs(surface.host);
 }
 
-let inboxAssistant: { host: HTMLElement; conversation: Conversation } | null = null;
+let inboxAssistant: {
+  host: HTMLElement;
+  conversation: Conversation;
+  history: ReturnType<typeof createInboxAssistantHistory>;
+} | null = null;
 
 function inboxAssistantHost(): HTMLElement {
   if (inboxAssistant) return inboxAssistant.host;
@@ -1356,11 +1365,14 @@ function inboxAssistantHost(): HTMLElement {
             (text) => html`
               <button
                 class="inbox-chat-suggestion"
+                type="button"
+                ?disabled=${inboxAssistantBusy()}
                 @click=${() => {
+                  if (inboxAssistantBusy()) return;
                   conversation.composer.state.draft = text;
                   if (conversation.state.threadRef) saveDraft(conversation.state.threadRef, text);
                   conversation.drawActiveChat();
-                  conversation.composer.focusComposerEnd();
+                  host.querySelector<HTMLFormElement>(".composer-wrap")?.requestSubmit();
                 }}
               >
                 ${text}
@@ -1386,7 +1398,11 @@ function inboxAssistantHost(): HTMLElement {
       if (changed) queueMicrotask(drawFull);
     },
   });
-  inboxAssistant = { host, conversation };
+  inboxAssistant = {
+    host,
+    conversation,
+    history: createInboxAssistantHistory(appState.me?.user ?? "anon", () => conversation.state.threadRef),
+  };
   host.textContent = "Loading conversation…";
   const restore = async (): Promise<void> => {
     try {
@@ -1496,31 +1512,41 @@ function drawFull(): void {
             </div>
             ${surfaceTpl(surface)}
             <aside class="inbox-item-aside inbox-list-aside" aria-label="Inbox assistant">
-              <div class="inbox-assistant-header">
-                <span class="inbox-assistant-title" dir="auto" title=${inboxAssistantTitle()}
-                  >${inboxAssistantTitle()}</span
-                >
-                <button
-                  class="icon-btn"
-                  type="button"
-                  aria-label="New inbox conversation"
-                  ${tip("New conversation")}
-                  ?disabled=${inboxAssistantBusy()}
-                  @click=${() => {
-                    const conversation = inboxAssistant?.conversation;
-                    if (!conversation || inboxAssistantBusy()) return;
-                    conversation.mountContinuable(
-                      `web:${appState.me?.user ?? "anon"}:inbox:${crypto.randomUUID()}`,
-                      null,
-                      null,
-                      [],
-                    );
-                  }}
-                >
-                  ${icon(SquarePen, 16)}
-                </button>
-              </div>
-              ${inboxAssistantHost()}
+              ${inboxChatHeader({
+                title: inboxAssistantTitle(),
+                className: "inbox-assistant-header",
+                actions: html`
+                  <button
+                    class="icon-btn"
+                    type="button"
+                    aria-label="Previous conversations"
+                    ${tip("Previous conversations")}
+                    @click=${(event: MouseEvent) => inboxAssistant?.history.open(event.currentTarget as HTMLElement)}
+                  >
+                    ${icon(History, 16)}
+                  </button>
+                  <button
+                    class="icon-btn"
+                    type="button"
+                    aria-label="New inbox conversation"
+                    ${tip("New conversation")}
+                    ?disabled=${inboxAssistantBusy()}
+                    @click=${() => {
+                      const conversation = inboxAssistant?.conversation;
+                      if (!conversation || inboxAssistantBusy()) return;
+                      conversation.mountContinuable(
+                        `web:${appState.me?.user ?? "anon"}:inbox:${crypto.randomUUID()}`,
+                        null,
+                        null,
+                        [],
+                      );
+                    }}
+                  >
+                    ${icon(SquarePen, 16)}
+                  </button>
+                `,
+              })}
+              ${inboxAssistantHost()} ${inboxAssistant?.history.host}
             </aside>
           `,
       host,

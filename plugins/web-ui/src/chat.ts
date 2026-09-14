@@ -2250,12 +2250,11 @@ export function createChatSurface(
     const rows = timeline.length
       ? html`<div class="work-rows">${timeline.map((it) => renderTimelineItem(it, work))}</div>`
       : nothing;
-    const body = html`<div class="work-divider"></div>
-      ${rows}`;
+
     if (isStreaming || work.status === "working" || work.status === "thinking") {
       return html`<div class="work work-working">
         <div class="work-head">${sheenLabel(workLabel(work), isStreaming)}</div>
-        ${body}
+        ${rows}
       </div>`;
     }
     const openFolds = !!work.pendingApprovals?.length;
@@ -2268,7 +2267,6 @@ export function createChatSurface(
       parts.push(
         html`<details class="work-fold" ?open=${openFolds}>
           <summary class="work-head">${segmentSummaryLabel(items, work)}${icon(ChevronRight, 14)}</summary>
-          <div class="work-divider"></div>
           <div class="work-rows">${items.map((it) => renderTimelineItem(it, work))}</div>
         </details>`,
       );

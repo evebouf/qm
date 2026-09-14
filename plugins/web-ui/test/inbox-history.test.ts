@@ -67,3 +67,29 @@ test("missing requests and long text still produce bounded readable entries", ()
   assert.equal(history[0].preview, "");
   assert.equal(history[1].title, "Previous conversation");
 });
+
+test("inbox assistant history includes only this user's saved inbox sessions, newest first", async () => {
+  const { previousInboxAssistantSessions } = await import("../src/inbox-history.ts");
+  const session = (id: string, threadRef: string, createdAt: number, lastActivityAt?: number) => ({
+    id,
+    threadRef,
+    createdAt,
+    lastActivityAt,
+    type: "dm" as const,
+    scopeId: "personal",
+  });
+  const sessions = [
+    session("old", "web:me:inbox:old", 1, 10),
+    session("new", "web:me:inbox:new", 5),
+    session("active", "web:me:inbox:active", 20),
+    session("other-user", "web:someone:inbox:old", 30),
+    session("chat", "web:me:chat", 40),
+    session("", "web:me:inbox:unsent", 50),
+  ];
+  const before = structuredClone(sessions);
+  assert.deepEqual(
+    previousInboxAssistantSessions(sessions, "me", "web:me:inbox:active").map((s) => s.id),
+    ["old", "new"],
+  );
+  assert.deepEqual(sessions, before);
+});

@@ -31,3 +31,14 @@ export function previousInboxConversations(item: Pick<InboxItem, "thread" | "con
     })
     .sort((a, b) => b.at - a.at);
 }
+
+export function previousInboxAssistantSessions(
+  sessions: readonly import("./core-bridge").CoreSession[],
+  user: string,
+  currentThread: string | null,
+): import("./core-bridge").CoreSession[] {
+  const prefix = `web:${user}:inbox:`;
+  return sessions
+    .filter((session) => session.id && session.threadRef.startsWith(prefix) && session.threadRef !== currentThread)
+    .sort((a, b) => (b.lastActivityAt ?? b.createdAt) - (a.lastActivityAt ?? a.createdAt));
+}

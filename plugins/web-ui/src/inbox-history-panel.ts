@@ -1,8 +1,9 @@
 import { html, nothing, type TemplateResult } from "lit";
-import { ArrowLeft, ChevronRight, X } from "lucide";
+import { ChevronRight } from "lucide";
 import { previousInboxConversations } from "./inbox-history";
 import type { InboxItem } from "./inbox";
 import { icon } from "./ui";
+import { inboxChatHeader } from "./inbox-chat-header";
 
 interface HistoryView {
   selectedId: string | null;
@@ -77,21 +78,13 @@ export function inboxHistoryPanel(item: InboxItem, redraw: () => void): Template
         back();
       }}
     >
-      <div class="inbox-history-head">
-        <button
-          class="icon-btn inbox-history-back"
-          type="button"
-          aria-label=${selected ? "Back to past conversations" : "Back to conversation"}
-          @click=${back}
-        >
-          ${icon(ArrowLeft, 16)}
-        </button>
-        <div class="inbox-history-heading">
-          <h2>${selected?.title ?? "Past conversations"}</h2>
-          ${selected ? html`<p>${date(selected.at)} · ${count(selected.messages.length)}</p>` : nothing}
-        </div>
-        ${selected ? html`<button class="icon-btn" type="button" aria-label="Back to current conversation" @click=${close}>${icon(X, 16)}</button>` : nothing}
-      </div>
+      ${inboxChatHeader({
+        title: selected?.title ?? "Past conversations",
+        className: "inbox-history-head",
+        back,
+        backLabel: selected ? "Back to past conversations" : "Back to conversation",
+        close: selected ? close : undefined,
+      })}
       ${
         selected
           ? html`
@@ -118,15 +111,15 @@ export function inboxHistoryPanel(item: InboxItem, redraw: () => void): Template
                             type="button"
                             data-conversation=${conversation.id}
                             @click=${() => {
-                              view.listScrollTop =
-                                chatFor(item.id, view)?.querySelector<HTMLElement>(".inbox-history-list")?.scrollTop ??
-                                0;
-                              view.selectedId = conversation.id;
-                              redraw();
-                              chatFor(item.id, view)
-                                ?.querySelector<HTMLElement>(".inbox-history-transcript")
-                                ?.focus({ preventScroll: true });
-                            }}
+                                        view.listScrollTop =
+                                          chatFor(item.id, view)?.querySelector<HTMLElement>(".inbox-history-list")
+                                            ?.scrollTop ?? 0;
+                                        view.selectedId = conversation.id;
+                                        redraw();
+                                        chatFor(item.id, view)
+                                          ?.querySelector<HTMLElement>(".inbox-history-transcript")
+                                          ?.focus({ preventScroll: true });
+                                      }}
                           >
                             <div class="inbox-history-entry-copy">
                               <span class="inbox-history-entry-title">${conversation.title}</span>

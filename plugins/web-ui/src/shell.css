@@ -1721,86 +1721,51 @@ a.chat-row-open {
 .user-bubble markdown-block {
   display: block;
 }
-:is(
-    .inbox-assistant-body .assistant-body markdown-block,
-    .inbox-assistant-body .assistant-body .slack-wire-text,
-    .inbox-chat-msg.agent
-  )
+:is(.assistant-body markdown-block, .assistant-body .slack-wire-text, .inbox-chat-msg.agent)
   a[href]:not(:has(img, svg)) {
   color: color-mix(in srgb, #1d4ed8 65%, var(--cta));
   text-decoration: none;
   transition: color 180ms ease-out;
 }
-:is(
-    .inbox-assistant-body .assistant-body markdown-block,
-    .inbox-assistant-body .assistant-body .slack-wire-text,
-    .inbox-chat-msg.agent
-  )
+:is(.assistant-body markdown-block, .assistant-body .slack-wire-text, .inbox-chat-msg.agent)
   a[href]:not(:has(img, svg)):is(:hover, :focus-visible) {
   color: color-mix(in srgb, #1d4ed8 45%, var(--cta));
 }
 .dark
-  :is(
-    .inbox-assistant-body .assistant-body markdown-block,
-    .inbox-assistant-body .assistant-body .slack-wire-text,
-    .inbox-chat-msg.agent
-  )
+  :is(.assistant-body markdown-block, .assistant-body .slack-wire-text, .inbox-chat-msg.agent)
   a[href]:not(:has(img, svg)),
 .dark
-  :is(
-    .inbox-assistant-body .assistant-body markdown-block,
-    .inbox-assistant-body .assistant-body .slack-wire-text,
-    .inbox-chat-msg.agent
-  )
+  :is(.assistant-body markdown-block, .assistant-body .slack-wire-text, .inbox-chat-msg.agent)
   a[href]:not(:has(img, svg)):is(:hover, :focus-visible) {
   color: var(--accent-foreground);
 }
-:is(
-    .inbox-assistant-body .assistant-body markdown-block,
-    .inbox-assistant-body .assistant-body .slack-wire-text,
-    .inbox-chat-msg.agent
-  )
+:is(.assistant-body markdown-block, .assistant-body .slack-wire-text, .inbox-chat-msg.agent)
   a[href]:not(:has(img, svg))::after {
   content: "";
   display: inline-block;
-  width: 1em;
-  height: 1em;
+  width: 0.8em;
+  height: 0.8em;
   margin-inline: 0.15em 0.1em;
-  vertical-align: -0.1em;
+  vertical-align: baseline;
   background-color: currentColor;
-  transform: translate(0, 1px);
+  opacity: 0.8;
+  transform: translate(0, 0);
   transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10M7 17 17 7'/%3E%3C/svg%3E")
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m9 6 6 6-6 6'/%3E%3C/svg%3E")
     center / contain no-repeat;
 }
-:is(
-    .inbox-assistant-body .assistant-body markdown-block,
-    .inbox-assistant-body .assistant-body .slack-wire-text,
-    .inbox-chat-msg.agent
-  )
+:is(.assistant-body markdown-block, .assistant-body .slack-wire-text, .inbox-chat-msg.agent)
   a[href]:not(:has(img, svg)):is(:hover, :focus-visible)::after {
   transform: translate(1px, 0);
 }
 @media (prefers-reduced-motion: reduce) {
-  :is(
-      .inbox-assistant-body .assistant-body markdown-block,
-      .inbox-assistant-body .assistant-body .slack-wire-text,
-      .inbox-chat-msg.agent
-    )
+  :is(.assistant-body markdown-block, .assistant-body .slack-wire-text, .inbox-chat-msg.agent)
     a[href]:not(:has(img, svg)) {
     transition: none;
   }
-  :is(
-      .inbox-assistant-body .assistant-body markdown-block,
-      .inbox-assistant-body .assistant-body .slack-wire-text,
-      .inbox-chat-msg.agent
-    )
+  :is(.assistant-body markdown-block, .assistant-body .slack-wire-text, .inbox-chat-msg.agent)
     a[href]:not(:has(img, svg))::after,
-  :is(
-      .inbox-assistant-body .assistant-body markdown-block,
-      .inbox-assistant-body .assistant-body .slack-wire-text,
-      .inbox-chat-msg.agent
-    )
+  :is(.assistant-body markdown-block, .assistant-body .slack-wire-text, .inbox-chat-msg.agent)
     a[href]:not(:has(img, svg)):is(:hover, :focus-visible)::after {
     transition: none;
     transform: none;
@@ -2226,12 +2191,9 @@ a.chat-row-open {
 .work-fold[open] > summary.work-head .icon {
   transform: rotate(90deg);
 }
-.work-divider {
-  height: 1px;
-  background: var(--border);
-  margin: 8px 0 10px;
-}
+
 .work-rows {
+  margin-top: 8px;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -8443,14 +8405,28 @@ h3.ambient-field-label {
   border-radius: var(--radius-sm);
   padding: 14px;
 }
-.inbox-assistant-header,
 .inbox-chat-header {
   display: flex;
   flex: none;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: 28px;
   color: var(--muted-foreground);
   font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.inbox-chat-header-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inbox-chat-header .icon-btn {
+  flex: none;
 }
 .inbox-chat-header .icon-btn:disabled {
   opacity: 0.4;
@@ -10870,8 +10846,11 @@ h3.ambient-field-label {
   border: 0;
   border-radius: 0;
 }
-.inbox-assistant-header {
+.inbox-chat-header {
   padding: 14px 14px 0;
+}
+.inbox-chat > .inbox-chat-header {
+  margin: -14px -14px 0;
 }
 .inbox-assistant-jump {
   display: none;
@@ -10890,34 +10869,6 @@ h3.ambient-field-label {
 
 .inbox-history-panel {
   min-height: 0;
-}
-.inbox-history-head {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 12px;
-  padding: 0 0 12px;
-  border-bottom: 1px solid var(--border);
-}
-.inbox-history-heading {
-  flex: 1;
-  min-width: 0;
-}
-.inbox-history-heading h2 {
-  margin: 0;
-  font-size: 13.5px;
-  font-weight: 550;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-.inbox-history-heading p {
-  margin: 5px 0 0;
-  color: var(--muted-foreground);
-  font-size: 12.5px;
-  overflow-wrap: anywhere;
-}
-.inbox-history-head .icon-btn {
-  flex: none;
 }
 .inbox-history-list {
   flex: 1;
@@ -11007,4 +10958,26 @@ h3.ambient-field-label {
 }
 .inbox-assistant-header > :is(.icon-btn, .inbox-chat-header-actions) {
   flex: none;
+}
+
+.inbox-assistant-history {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.inbox-assistant-history[hidden],
+.inbox-list-aside:has(.inbox-assistant-history:not([hidden])) > :is(.inbox-assistant-header, .inbox-assistant-body) {
+  display: none;
+}
+.inbox-assistant-history > .inbox-chat {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+}
+.inbox-assistant-history-transcript :is(.chat-topbar, .readonly-banner) {
+  display: none;
+}
+.inbox-assistant-history-transcript .chat-scroll {
+  padding-inline: 0;
 }
