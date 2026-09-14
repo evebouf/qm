@@ -173,12 +173,14 @@ function template(rel: string): string {
   return readFileSync(existsSync(source) ? source : packaged, "utf8");
 }
 
-function isRegistryDependencySpec(spec: string): boolean {
+function isOrdinaryRegistryDependencySpec(spec: string): boolean {
+  const normalized = spec.trim();
   return !(
-    /^(?:\.{1,2}[\\/]|~[\\/]|[\\/]|[a-z]:[\\/])/i.test(spec) ||
-    /^[a-z][a-z0-9+.-]*:/i.test(spec) ||
-    /^[^@\s]+@[^:\s]+:/.test(spec) ||
-    /^[^@\s/]+\/[^@\s/]+(?:#.*)?$/.test(spec)
+    /[\\/]/.test(normalized) ||
+    /^(?:\.|[a-z]:)/i.test(normalized) ||
+    /\.(?:tgz|tar\.gz|tar)$/i.test(normalized) ||
+    /^[a-z][a-z0-9+.-]*:/i.test(normalized) ||
+    /^[^@\s]+@[^:\s]+:/.test(normalized)
   );
 }
 
@@ -217,7 +219,7 @@ function packageContent(dir: string, orgId: string): string {
   const dependencies = objectField("dependencies");
   const existingSpec = dependencies[packageName];
   const installedPackage =
-    typeof existingSpec === "string" && !isRegistryDependencySpec(existingSpec) ? existingSpec : cliVersion();
+    typeof existingSpec === "string" && !isOrdinaryRegistryDependencySpec(existingSpec) ? existingSpec : cliVersion();
   delete dependencies["qm-cli"];
   delete dependencies[packageName];
   for (const group of ["devDependencies", "optionalDependencies"] as const) {

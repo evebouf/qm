@@ -72,8 +72,8 @@ npm install
 `qm init` writes the version it resolved to as an exact registry dependency, so
 the pin lands in the deployment repository and its lockfile rather than in the
 command that bootstraps it. It replaces an existing registry version, range, or
-tag, but preserves an explicit local, Git, URL, or npm-alias source used for
-development.
+tag, but preserves explicit local, Git, or URL source overrides and npm alias
+overrides used for development.
 
 `--model-provider` takes `anthropic`, `openai`, or `openrouter` and defaults to
 `anthropic`. It writes `modelProvider` into the scaffolded config, which is what

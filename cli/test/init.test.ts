@@ -458,12 +458,17 @@ test("init preflights package.json and completes an install-first package manife
   }
 });
 
-test("init preserves intentional non-registry CLI sources", () => {
+test("init preserves intentional CLI source and alias overrides", () => {
   const specs = [
     "file:../packages/yc-software-qm-0.1.0.tgz",
     "link:../qm/cli",
     "../packages/yc-software-qm-0.1.0.tgz",
     "/tmp/yc-software-qm-0.1.0.tgz",
+    "qm-local.tgz",
+    "qm-local.tar.gz",
+    ".",
+    "..",
+    "  ./qm-local.tgz  ",
     "git+https://github.com/yc-software/qm.git#main",
     "git@github.com:yc-software/qm.git#main",
     "yc-software/qm#main",
