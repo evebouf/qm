@@ -118,14 +118,15 @@ export function inboxHistoryPanel(item: InboxItem, redraw: () => void): Template
                             type="button"
                             data-conversation=${conversation.id}
                             @click=${() => {
-                        view.listScrollTop =
-                          chatFor(item.id, view)?.querySelector<HTMLElement>(".inbox-history-list")?.scrollTop ?? 0;
-                        view.selectedId = conversation.id;
-                        redraw();
-                        chatFor(item.id, view)
-                          ?.querySelector<HTMLElement>(".inbox-history-transcript")
-                          ?.focus({ preventScroll: true });
-                      }}
+                              view.listScrollTop =
+                                chatFor(item.id, view)?.querySelector<HTMLElement>(".inbox-history-list")?.scrollTop ??
+                                0;
+                              view.selectedId = conversation.id;
+                              redraw();
+                              chatFor(item.id, view)
+                                ?.querySelector<HTMLElement>(".inbox-history-transcript")
+                                ?.focus({ preventScroll: true });
+                            }}
                           >
                             <div class="inbox-history-entry-copy">
                               <span class="inbox-history-entry-title">${conversation.title}</span>
