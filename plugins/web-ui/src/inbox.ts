@@ -22,7 +22,7 @@ import {
   onInboxItemEvent,
   onInboxResync,
 } from "./conversations";
-import type { Conversation } from "./conv-types";
+import type { Conversation, ConvHost } from "./conv-types";
 import { saveDraft } from "./drafts";
 import { inboxChatHeader } from "./inbox-chat-header";
 import { createInboxAssistantHistory } from "./inbox-assistant-history";
@@ -1344,6 +1344,14 @@ function inboxAssistantHost(): HTMLElement {
   } catch {
     void 0;
   }
+  const inboxChatOptions: Pick<ConvHost, "turnOptions" | "composerPlaceholder" | "thinkingIndicator"> = {
+    turnOptions: () => ({
+      inboxView: fullViewId === "gmail" || fullViewId === "slack" ? fullViewId : "all",
+    }),
+    composerPlaceholder: () => `Ask ${brandName()} what needs a reply…`,
+    thinkingIndicator: () =>
+      html`<div class="inbox-chat-working" aria-live="polite">${workingWave()}<span>Thinking…</span></div>`,
+  };
   const conversation = createConversation({
     pane: true,
     ownsUrl: false,
@@ -1353,10 +1361,7 @@ function inboxAssistantHost(): HTMLElement {
     density: () => "compact",
     onDensityChange: () => {},
     ensureDeliveryStream,
-    turnOptions: () => ({ inboxView: fullViewId === "gmail" || fullViewId === "slack" ? fullViewId : "all" }),
-    composerPlaceholder: () => `Ask ${brandName()} what needs a reply…`,
-    thinkingIndicator: () =>
-      html`<div class="inbox-chat-working" aria-live="polite">${workingWave()}<span>Thinking…</span></div>`,
+    ...inboxChatOptions,
     emptyState: () => html`
       <div class="inbox-chat-empty">
         <h2 class="inbox-chat-cta">How can I help with your inbox?</h2>
@@ -1401,7 +1406,10 @@ function inboxAssistantHost(): HTMLElement {
   inboxAssistant = {
     host,
     conversation,
-    history: createInboxAssistantHistory(appState.me?.user ?? "anon", () => conversation.state.threadRef),
+    history: createInboxAssistantHistory(appState.me?.user ?? "anon", () => conversation.state.threadRef, {
+      ...inboxChatOptions,
+      onSettled: () => void refreshInbox({ silent: true }),
+    }),
   };
   host.textContent = "Loading conversation…";
   const restore = async (): Promise<void> => {
@@ -1555,6 +1563,7 @@ function drawFull(): void {
   if (!openItem && inboxAssistant) {
     inboxAssistant.conversation.drawActiveChat();
     if (!assistantWasConnected) inboxAssistant.conversation.resumeIfIdle();
+    inboxAssistant.history.redraw(!assistantWasConnected);
   }
   sizeAside(host);
   sizeChatInputs(host);

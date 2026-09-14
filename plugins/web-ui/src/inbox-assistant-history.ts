@@ -1,14 +1,18 @@
 import { html, render } from "lit";
 import { ChevronRight } from "lucide";
-import { api, entriesToMessages, fetchTranscript, TAIL_TURNS, type CoreSession } from "./core-bridge";
+import { api, fetchTranscript, TAIL_TURNS, type CoreSession } from "./core-bridge";
 import { createConversation, disposeConversation, ensureDeliveryStream } from "./conversations";
-import type { Conversation } from "./conv-types";
+import type { Conversation, ConvHost } from "./conv-types";
 import { previousInboxAssistantSessions } from "./inbox-history";
-import { transcriptModel } from "./model-options";
+import { openSessionInto } from "./sessions";
 import { icon } from "./ui";
 import { inboxChatHeader } from "./inbox-chat-header";
 
-export function createInboxAssistantHistory(user: string, currentThread: () => string | null) {
+export function createInboxAssistantHistory(
+  user: string,
+  currentThread: () => string | null,
+  options: Pick<ConvHost, "turnOptions" | "composerPlaceholder" | "thinkingIndicator"> & { onSettled(): void },
+) {
   const host = document.createElement("div");
   host.className = "inbox-assistant-history";
   host.hidden = true;
@@ -17,20 +21,20 @@ export function createInboxAssistantHistory(user: string, currentThread: () => s
   let selected: CoreSession | null = null;
   let transcript: Conversation | null = null;
   let transcriptHost: HTMLElement | null = null;
+  const conversations = new Map<string, { conversation: Conversation; host: HTMLElement }>();
   let loading = false;
   let error = false;
   let generation = 0;
   let listScrollTop = 0;
 
-  const disposeTranscript = () => {
-    if (transcript) disposeConversation(transcript);
+  const clearTranscriptSelection = () => {
     transcript = null;
     transcriptHost = null;
   };
   const close = () => {
     generation++;
     host.hidden = true;
-    disposeTranscript();
+    clearTranscriptSelection();
     opener?.focus({ preventScroll: true });
   };
   const focusBack = () => host.querySelector<HTMLButtonElement>(".inbox-history-back")?.focus({ preventScroll: true });
@@ -40,7 +44,7 @@ export function createInboxAssistantHistory(user: string, currentThread: () => s
     generation++;
     selected = null;
     loading = error = false;
-    disposeTranscript();
+    clearTranscriptSelection();
     draw();
     const list = host.querySelector<HTMLElement>(".inbox-history-list");
     if (list) list.scrollTop = listScrollTop;
@@ -56,28 +60,48 @@ export function createInboxAssistantHistory(user: string, currentThread: () => s
     try {
       if (selected) {
         const session = selected;
-        const page = await fetchTranscript(session.id, { tailTurns: TAIL_TURNS });
-        if (generation !== request) return;
-        transcriptHost = document.createElement("div");
-        transcriptHost.className = "inbox-assistant-body inbox-assistant-history-transcript";
-        const container = transcriptHost;
-        transcript = createConversation({
-          pane: true,
-          ownsUrl: false,
-          container: () => container,
-          claimContainer: () => container,
-          visible: () => !host.hidden && host.isConnected,
-          density: () => "compact",
-          onDensityChange: () => {},
-          ensureDeliveryStream,
-        });
-        transcript.mountReadOnly(
-          page.session ?? session,
-          entriesToMessages(page.entries, transcriptModel()),
-          page.earlierEntries ?? 0,
-          page.entries[0]?.seq ?? null,
-        );
-        transcript.setPins(page.pins ?? []);
+        const cached = conversations.get(session.id);
+        if (cached) {
+          transcript = cached.conversation;
+          transcriptHost = cached.host;
+        } else {
+          const page = await fetchTranscript(session.id, { tailTurns: TAIL_TURNS });
+          if (generation !== request) return;
+          const container = document.createElement("div");
+          container.className = "inbox-assistant-body inbox-assistant-history-transcript";
+          let working = false;
+          const conversation = createConversation({
+            pane: true,
+            ownsUrl: false,
+            container: () => container,
+            claimContainer: () => container,
+            visible: () => !host.hidden && container.isConnected && selected?.id === session.id,
+            density: () => "compact",
+            onDensityChange: () => {},
+            ensureDeliveryStream,
+            turnOptions: options.turnOptions,
+            composerPlaceholder: options.composerPlaceholder,
+            thinkingIndicator: options.thinkingIndicator,
+            onState: (state) => {
+              if (working && !state.working) options.onSettled();
+              working = state.working;
+            },
+          });
+          try {
+            await openSessionInto(conversation, session, Promise.resolve(page));
+            if (generation !== request) {
+              disposeConversation(conversation);
+              return;
+            }
+            if (!conversation.state.agent) throw new Error("Could not continue this conversation.");
+          } catch (error) {
+            disposeConversation(conversation);
+            throw error;
+          }
+          conversations.set(session.id, { conversation, host: container });
+          transcript = conversation;
+          transcriptHost = container;
+        }
       } else {
         const result = await api<{ sessions: CoreSession[] }>("/api/sessions");
         if (generation !== request) return;
@@ -86,11 +110,13 @@ export function createInboxAssistantHistory(user: string, currentThread: () => s
     } catch {
       if (generation !== request) return;
       error = true;
-      disposeTranscript();
+      clearTranscriptSelection();
     } finally {
       if (generation === request) {
         loading = false;
         draw();
+        transcript?.drawActiveChat();
+        transcript?.resumeIfIdle();
       }
     }
   };
@@ -165,11 +191,20 @@ export function createInboxAssistantHistory(user: string, currentThread: () => s
       opener = button;
       selected = null;
       listScrollTop = 0;
-      disposeTranscript();
+      clearTranscriptSelection();
       host.hidden = false;
       void load();
       focusBack();
     },
-    dispose: close,
+    redraw(resume: boolean) {
+      if (host.hidden) return;
+      transcript?.drawActiveChat();
+      if (resume) transcript?.resumeIfIdle();
+    },
+    dispose() {
+      close();
+      for (const entry of conversations.values()) disposeConversation(entry.conversation);
+      conversations.clear();
+    },
   };
 }
