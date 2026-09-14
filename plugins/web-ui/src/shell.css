@@ -10629,6 +10629,9 @@ h3.ambient-field-label {
   container-type: normal;
   padding: 14px;
 }
+.inbox-assistant-body .user-bubble {
+  font-size: 13.5px;
+}
 .inbox-assistant-body .message-stack {
   width: 100%;
 }
