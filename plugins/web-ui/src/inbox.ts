@@ -1458,6 +1458,10 @@ function inboxAssistantTitle(): string {
   return session?.title?.trim() || "New conversation";
 }
 
+function inboxAssistantCanRestart(): boolean {
+  return !inboxAssistantBusy() && Boolean(inboxAssistant?.conversation.state.agent?.state.messages.length);
+}
+
 function inboxAssistantBusy(): boolean {
   const conversation = inboxAssistant?.conversation;
   return (
@@ -1538,16 +1542,17 @@ function drawFull(): void {
                     type="button"
                     aria-label="New inbox conversation"
                     ${tip("New conversation")}
-                    ?disabled=${inboxAssistantBusy()}
+                    ?disabled=${!inboxAssistantCanRestart()}
                     @click=${() => {
                       const conversation = inboxAssistant?.conversation;
-                      if (!conversation || inboxAssistantBusy()) return;
+                      if (!conversation || !inboxAssistantCanRestart()) return;
                       conversation.mountContinuable(
                         `web:${appState.me?.user ?? "anon"}:inbox:${crypto.randomUUID()}`,
                         null,
                         null,
                         [],
                       );
+                      drawFull();
                     }}
                   >
                     ${icon(SquarePen, 16)}
