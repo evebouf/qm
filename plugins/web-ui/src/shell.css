@@ -1721,6 +1721,20 @@ a.chat-row-open {
 .user-bubble markdown-block {
   display: block;
 }
+.assistant-body markdown-block a[href]:not(:has(img, svg))::after,
+.assistant-body .slack-wire-text a[href]:not(:has(img, svg))::after,
+.inbox-chat-msg.agent a[href]:not(:has(img, svg))::after {
+  content: "";
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  margin-inline-start: 0.2em;
+  vertical-align: baseline;
+  background-color: currentColor;
+  opacity: 0.8;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10M7 17 17 7'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
 .streaming-text {
   position: relative;
 }
