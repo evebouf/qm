@@ -1285,6 +1285,8 @@ function inboxAssistantHost(): HTMLElement {
     onDensityChange: () => {},
     ensureDeliveryStream,
     turnOptions: () => ({ inboxView: fullViewId === "gmail" || fullViewId === "slack" ? fullViewId : "all" }),
+    thinkingIndicator: () =>
+      html`<div class="inbox-chat-working" aria-live="polite">${workingWave()}<span>Thinking…</span></div>`,
     emptyState: () => html`
       <div class="inbox-chat-empty">
         <h2 class="inbox-chat-cta">How can I help with your inbox?</h2>

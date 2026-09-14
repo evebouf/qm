@@ -2146,6 +2146,7 @@ export function createChatSurface(
     if (work.status !== "thinking" && work.status !== "working") return nothing;
     const stopping = runSlot.stopGeneration === runSlot.generation;
     const summary = stopping ? null : liveWorkSummary(work);
+    if (!stopping && !summary && ctx.thinkingIndicator) return ctx.thinkingIndicator();
     const expandable = Boolean(summary?.detail);
     const expanded = expandable && liveWorkExpanded;
     let title = "";

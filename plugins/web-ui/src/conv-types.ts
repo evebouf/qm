@@ -32,6 +32,7 @@ export interface ConvHost {
   onExpand?(): void;
   turnOptions?(): Pick<TurnOptions, "inboxView">;
   emptyState?(): TemplateResult;
+  thinkingIndicator?(): TemplateResult;
 }
 
 export interface ConvCtx extends ConvHost {
