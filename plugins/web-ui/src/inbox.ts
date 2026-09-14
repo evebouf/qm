@@ -5,28 +5,39 @@ import {
   CheckCheck,
   ChevronDown,
   ChevronRight,
+  History,
   Inbox as InboxGlyph,
   Mail,
   RefreshCw,
   Send,
+  SquarePen,
   Undo2,
   X,
 } from "lucide";
-import { api, ApiError } from "./core-bridge";
-import { onInboxItemEvent, onInboxResync } from "./conversations";
+import { api, ApiError, fetchTranscript } from "./core-bridge";
+import {
+  createConversation,
+  disposeConversation,
+  ensureDeliveryStream,
+  onInboxItemEvent,
+  onInboxResync,
+} from "./conversations";
+import type { Conversation } from "./conv-types";
+import { saveDraft } from "./drafts";
 import { createInboxEventCoalescer, type InboxItemRef } from "./inbox-coalesce";
 import { charForName, ensureEmojiIndex } from "./emoji-picker";
 import type { DensityTier } from "./density";
 import { deepLinkPath, UI_BASE } from "./deep-link";
 import { appState, can } from "./shell-state";
 import { renderSidebarTop, switchView } from "./shell";
-import { openSession, sessionsState } from "./sessions";
+import { openSession, openSessionInto, refreshSessions, sessionsState } from "./sessions";
 import { splitMentions } from "./linkify";
 import { splitSlackWire } from "./slack-text";
 import { listBackLink } from "./list-page";
 import { registerPaneKind } from "./pane-kinds";
 import { beginPaneKindDrag, endPaneDrag, exitSplitIfActive, notifyPanesChanged } from "./split";
 import { tip } from "./tooltip";
+import { closeInboxHistory, inboxHistoryPanel, openInboxHistory } from "./inbox-history-panel";
 import { brandName, icon, initials, relTime, slackMark, workingWave } from "./ui";
 
 export type InboxSource = "gmail" | "slack";
@@ -47,6 +58,7 @@ export interface InboxContextMessage {
 
 export interface LedgerThreadMessage {
   id: string;
+  conversationId?: string;
   role: "human" | "agent" | "system";
   text: string;
   at: number;
@@ -62,6 +74,7 @@ export interface LedgerItem {
   sourceAt?: number;
   proposal?: { data: Record<string, unknown>; by: "agent" | "human"; at: number; sessionId?: string };
   thread: LedgerThreadMessage[];
+  conversationId?: string;
   actedAt?: number;
   actionKind?: string;
   actionResult?: string;
@@ -86,6 +99,7 @@ export interface InboxItem {
   draftAt?: number;
   draftSessionId?: string;
   thread: LedgerThreadMessage[];
+  conversationId?: string;
   gmail?: { threadId: string; subject?: string; to?: string[]; cc?: string[] };
   slack?: { channelId: string; channelLabel?: string; ts: string; threadTs?: string };
   sentAt?: number;
@@ -169,6 +183,8 @@ export function attachInboxSurface(surface: { redraw: () => void; visible: () =>
 }
 
 export function resetInboxState(): void {
+  if (inboxAssistant) disposeConversation(inboxAssistant.conversation);
+  inboxAssistant = null;
   inboxState.items = [];
   inboxState.loopId = null;
   inboxState.syncCron = null;
@@ -183,6 +199,7 @@ export function resetInboxState(): void {
   acting.clear();
   chatting.clear();
   chatDrafts.clear();
+  closeInboxHistory();
 }
 
 export function inboxViews(): InboxView[] {
@@ -245,6 +262,7 @@ export function toInboxItem(entry: LedgerItem): InboxItem {
     snippet: str(payload.snippet) ?? "",
     receivedAt: entry.sourceAt ?? (typeof payload.receivedAt === "number" ? payload.receivedAt : entry.updatedAt),
     thread: entry.thread,
+    ...(entry.conversationId ? { conversationId: entry.conversationId } : {}),
     updatedAt: entry.updatedAt,
     ...(str(payload.fromDetail) ? { fromDetail: payload.fromDetail as string } : {}),
     ...(Array.isArray(payload.context) ? { context: payload.context as InboxContextMessage[] } : {}),
@@ -577,6 +595,22 @@ export async function setItemStatus(item: InboxItem, status: "open" | "dismissed
   }
 }
 
+async function restartConversation(item: InboxItem, chat: HTMLElement | null): Promise<void> {
+  if (chatting.has(item.id) || acting.has(item.id)) return;
+  chatting.add(item.id);
+  drawAll();
+  try {
+    replaceItem(await postAction(item, "restart_conversation", { conversationId: item.conversationId ?? "" }));
+  } catch (e) {
+    notify(`Couldn't start a new conversation: ${e instanceof Error ? e.message : e}`);
+    await refetchItem(item);
+  } finally {
+    chatting.delete(item.id);
+    drawAll();
+    if (chat?.isConnected) chat.querySelector<HTMLTextAreaElement>(".inbox-chat-input")?.focus();
+  }
+}
+
 export async function askAgent(item: InboxItem, message: string): Promise<void> {
   const text = message.trim();
   if (!text || chatting.has(item.id)) return;
@@ -586,7 +620,7 @@ export async function askAgent(item: InboxItem, message: string): Promise<void> 
   try {
     const { item: next } = await api<{ item: LedgerItem }>(actionPath(item, "followup"), {
       method: "POST",
-      body: JSON.stringify({ message: text }),
+      body: JSON.stringify({ message: text, conversationId: item.conversationId ?? "" }),
     });
     const mapped = toInboxItem(next);
     draftEdits.delete(item.id);
@@ -594,6 +628,7 @@ export async function askAgent(item: InboxItem, message: string): Promise<void> 
   } catch (e) {
     notify(`The agent couldn't answer: ${e instanceof Error ? e.message : e}`);
     if (!chatDrafts.has(item.id)) chatDrafts.set(item.id, text);
+    if (e instanceof ApiError && e.status === 409) await refetchItem(item);
   } finally {
     chatting.delete(item.id);
     drawAll();
@@ -770,6 +805,8 @@ export function contextTpl(item: InboxItem): TemplateResult | typeof nothing {
 }
 
 export function chatTpl(item: InboxItem): TemplateResult {
+  const history = inboxHistoryPanel(item, drawAll);
+  if (history) return history;
   const busy = chatting.has(item.id);
   const pending = chatDrafts.get(item.id) ?? "";
   const submit = (el: HTMLTextAreaElement): void => {
@@ -779,9 +816,42 @@ export function chatTpl(item: InboxItem): TemplateResult {
     autosizeChatInput(el);
     void askAgent(item, text);
   };
-  const empty = item.thread.length === 0;
+  const thread = item.thread.filter((message) => (message.conversationId ?? "") === (item.conversationId ?? ""));
+  const previous = item.thread.filter((message) => (message.conversationId ?? "") !== (item.conversationId ?? ""));
+  const empty = thread.length === 0;
   return html`
-    <div class="inbox-chat">
+    <div class="inbox-chat" data-inbox-item=${item.id}>
+      <div class="inbox-chat-header">
+        <span>Conversation</span>
+        <div class="inbox-chat-header-actions">
+          ${
+            previous.length
+              ? html`
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    aria-label="Previous conversations"
+                    ${tip("Previous conversations")}
+                    @click=${(event: MouseEvent) => openInboxHistory(item, event.currentTarget as HTMLElement, drawAll)}
+                  >
+                    ${icon(History, 16)}
+                  </button>
+                `
+              : nothing
+          }
+          <button
+            type="button"
+            class="icon-btn"
+            aria-label="New conversation"
+            ${tip("New conversation")}
+            ?disabled=${busy || acting.has(item.id) || empty}
+            @click=${(event: MouseEvent) => void restartConversation(item, (event.currentTarget as HTMLElement).closest(".inbox-chat"))}
+          >
+            ${icon(SquarePen, 16)}
+          </button>
+        </div>
+      </div>
+      ${inboxState.notice ? html`<div class="inbox-notice" role="status">${inboxState.notice}</div>` : nothing}
       ${
         empty
           ? html`<div class="inbox-chat-empty">
@@ -801,7 +871,7 @@ export function chatTpl(item: InboxItem): TemplateResult {
               </div>
             </div>`
           : html`<div class="inbox-chat-log">
-              ${item.thread.map(
+              ${thread.map(
                 (m) =>
                   html`<div class="inbox-chat-msg ${m.role}">
                     <span class="inbox-chat-text">${m.text}</span>
@@ -814,7 +884,7 @@ export function chatTpl(item: InboxItem): TemplateResult {
         <textarea
           class="inbox-chat-input"
           rows="1"
-          placeholder=${`Ask ${brandName()} for something`}
+          placeholder=${item.draft ? `Ask ${brandName()} to refine this draft…` : `Ask ${brandName()} about this message…`}
           .value=${pending}
           @input=${(e: Event) => {
             const box = e.currentTarget as HTMLTextAreaElement;
@@ -1243,6 +1313,127 @@ function drawSurface(surface: InboxSurface): void {
   sizeChatInputs(surface.host);
 }
 
+let inboxAssistant: { host: HTMLElement; conversation: Conversation } | null = null;
+
+function inboxAssistantHost(): HTMLElement {
+  if (inboxAssistant) return inboxAssistant.host;
+  const host = document.createElement("div");
+  host.className = "inbox-assistant-body";
+  host.dataset.density = "compact";
+  let working = false;
+  const prefix = `web:${appState.me?.user ?? "anon"}:inbox:`;
+  const storageKey = `qm-inbox-assistant:${appState.me?.user ?? "anon"}`;
+  let saved: { threadRef: string; sessionId: string | null } | null = null;
+  try {
+    const stored = JSON.parse(localStorage.getItem(storageKey) ?? "null");
+    if (typeof stored?.threadRef === "string" && stored.threadRef.startsWith(prefix))
+      saved = {
+        threadRef: stored.threadRef,
+        sessionId: typeof stored.sessionId === "string" ? stored.sessionId : null,
+      };
+  } catch {
+    void 0;
+  }
+  const conversation = createConversation({
+    pane: true,
+    ownsUrl: false,
+    container: () => host,
+    claimContainer: () => host,
+    visible: () => appState.currentView === "inbox" && host.isConnected,
+    density: () => "compact",
+    onDensityChange: () => {},
+    ensureDeliveryStream,
+    turnOptions: () => ({ inboxView: fullViewId === "gmail" || fullViewId === "slack" ? fullViewId : "all" }),
+    composerPlaceholder: () => `Ask ${brandName()} what needs a reply…`,
+    thinkingIndicator: () =>
+      html`<div class="inbox-chat-working" aria-live="polite">${workingWave()}<span>Thinking…</span></div>`,
+    emptyState: () => html`
+      <div class="inbox-chat-empty">
+        <h2 class="inbox-chat-cta">How can I help with your inbox?</h2>
+        <div class="inbox-chat-suggest">
+          ${["What needs my attention?", "Help me find an email", "Help me triage"].map(
+            (text) => html`
+              <button
+                class="inbox-chat-suggestion"
+                @click=${() => {
+                  conversation.composer.state.draft = text;
+                  if (conversation.state.threadRef) saveDraft(conversation.state.threadRef, text);
+                  conversation.drawActiveChat();
+                  conversation.composer.focusComposerEnd();
+                }}
+              >
+                ${text}
+              </button>
+            `,
+          )}
+        </div>
+      </div>
+    `,
+    onState: (state) => {
+      if (working && !state.working) void refreshInbox({ silent: true });
+      const changed = working !== state.working;
+      working = state.working;
+      if (state.threadRef) {
+        try {
+          localStorage.setItem(storageKey, JSON.stringify({ threadRef: state.threadRef, sessionId: state.sessionId }));
+        } catch {
+          void 0;
+        }
+      }
+      if (changed) queueMicrotask(drawFull);
+    },
+  });
+  inboxAssistant = { host, conversation };
+  host.textContent = "Loading conversation…";
+  const restore = async (): Promise<void> => {
+    try {
+      if (saved) {
+        const transcript = saved.sessionId ? await fetchTranscript(saved.sessionId, { tailTurns: 25 }) : null;
+        if (!transcript?.session && !sessionsState.loaded && !(await refreshSessions({ silent: true })))
+          throw new Error("Could not load the conversation list.");
+        if (inboxAssistant?.conversation !== conversation) return;
+        const session = transcript?.session ?? sessionsState.list.find((entry) => entry.threadRef === saved!.threadRef);
+        if (session?.threadRef === saved.threadRef) {
+          await openSessionInto(conversation, session, transcript ? Promise.resolve(transcript) : undefined);
+          if (!conversation.state.agent) throw new Error("Could not load the conversation.");
+          return;
+        }
+      }
+      if (inboxAssistant?.conversation !== conversation) return;
+      conversation.mountContinuable(saved?.threadRef ?? `${prefix}${crypto.randomUUID()}`, null, null, []);
+    } catch (error) {
+      if (inboxAssistant?.conversation !== conversation) return;
+      if (error instanceof ApiError && error.status === 404) {
+        saved = null;
+        conversation.mountContinuable(`${prefix}${crypto.randomUUID()}`, null, null, []);
+      } else {
+        render(
+          html`<div class="inbox-assistant-load-error">
+            Could not load your conversation.
+            <button @click=${() => void restore()}>Retry</button>
+          </div>`,
+          host,
+        );
+      }
+    } finally {
+      drawFull();
+    }
+  };
+  queueMicrotask(() => void restore());
+  return host;
+}
+
+function inboxAssistantBusy(): boolean {
+  const conversation = inboxAssistant?.conversation;
+  return (
+    !conversation?.state.agent ||
+    conversation.hasLiveRun() ||
+    conversation.state.agent.state.isStreaming ||
+    Boolean(conversation.state.pendingSend) ||
+    conversation.composer.state.processingFiles
+  );
+}
+
 let fullSurface: InboxSurface | null = null;
 let asideObserver: ResizeObserver | null = null;
 let fullViewId = "all";
@@ -1274,6 +1465,7 @@ function drawFull(): void {
   syncItemUrl(fullSurface.selectedId);
   const host = fullSurface.host;
   const surface = fullSurface;
+  const assistantWasConnected = inboxAssistant?.host.isConnected ?? false;
   keepingChatLogsPinned(host, () =>
     render(
       openItem
@@ -1281,13 +1473,50 @@ function drawFull(): void {
         : html`
             <div class="pane-head">
               <h1 class="pane-title">Inbox</h1>
-              <div class="pane-head-actions">${syncLineTpl()}</div>
+              <div class="pane-head-actions">
+                <button
+                  class="inbox-assistant-jump"
+                  @click=${() => inboxAssistant?.host.scrollIntoView({ block: "start", behavior: "smooth" })}
+                >
+                  Ask AI
+                </button>
+                ${syncLineTpl()}
+              </div>
             </div>
             ${surfaceTpl(surface)}
+            <aside class="inbox-item-aside inbox-list-aside" aria-label="Inbox assistant">
+              <div class="inbox-assistant-header">
+                <span>Inbox assistant</span>
+                <button
+                  class="icon-btn"
+                  type="button"
+                  aria-label="New inbox conversation"
+                  ${tip("New conversation")}
+                  ?disabled=${inboxAssistantBusy()}
+                  @click=${() => {
+                    const conversation = inboxAssistant?.conversation;
+                    if (!conversation || inboxAssistantBusy()) return;
+                    conversation.mountContinuable(
+                      `web:${appState.me?.user ?? "anon"}:inbox:${crypto.randomUUID()}`,
+                      null,
+                      null,
+                      [],
+                    );
+                  }}
+                >
+                  ${icon(SquarePen, 16)}
+                </button>
+              </div>
+              ${inboxAssistantHost()}
+            </aside>
           `,
       host,
     ),
   );
+  if (!openItem && inboxAssistant) {
+    inboxAssistant.conversation.drawActiveChat();
+    if (!assistantWasConnected) inboxAssistant.conversation.resumeIfIdle();
+  }
   sizeAside(host);
   sizeChatInputs(host);
 }

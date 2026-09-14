@@ -541,3 +541,28 @@ test("a paused loop refuses to fire", async () => {
   assert.equal(result.status, "silent");
   assert.equal(s.turns.length, 0);
 });
+
+test("restarted item conversations use a fresh agent session and exclude previous chat context", async () => {
+  const { loops, items, fire, turns } = service(() => "Noted.");
+  const loop = await makeLoop(loops);
+  await items.ingest([
+    {
+      loopId: loop.id,
+      dedupeKey: "email-1",
+      sourcePayload: { title: "Keep email context" },
+      proposal: { data: { body: "Keep current draft" }, by: "human" },
+    },
+  ]);
+  const item = (await items.byLoop(loop.id))[0]!;
+  await fire.followUp(loop, item, "Old conversation marker", "josh");
+  const restarted = (await items.restartConversation(item.id, ""))!;
+  await fire.followUp(loop, restarted, "Fresh request", "josh");
+  assert.equal(turns.length, 2);
+  assert.notEqual(turns[0]!.conversation.threadRef, turns[1]!.conversation.threadRef);
+  assert.doesNotMatch(turns[1]!.text ?? "", /Old conversation marker/);
+  assert.match(turns[1]!.text ?? "", /Keep email context/);
+  assert.match(turns[1]!.text ?? "", /Keep current draft/);
+  const after = (await items.get(item.id))!;
+  assert.equal(after.thread?.length, 4);
+  assert.equal(after.thread?.at(-1)?.conversationId, restarted.conversationId);
+});

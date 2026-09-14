@@ -1,0 +1,33 @@
+import type { InboxItem, LedgerThreadMessage } from "./inbox.ts";
+
+function excerpt(text: string, limit: number): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  return normalized.length > limit ? `${normalized.slice(0, limit - 1).trimEnd()}…` : normalized;
+}
+
+export function previousInboxConversations(item: Pick<InboxItem, "thread" | "conversationId">) {
+  const groups = new Map<string, LedgerThreadMessage[]>();
+  for (const message of item.thread) {
+    const id = message.conversationId ?? "";
+    if (id === (item.conversationId ?? "")) continue;
+    const messages = groups.get(id) ?? [];
+    messages.push(message);
+    groups.set(id, messages);
+  }
+  return [...groups]
+    .map(([id, messages]) => {
+      messages.sort((a, b) => a.at - b.at);
+      const first =
+        messages.find((message) => message.role === "human" && message.text.trim()) ??
+        messages.find((message) => message.text.trim());
+      const lastReply = messages.findLast((message) => message.role === "agent" && message.text.trim());
+      return {
+        id,
+        title: first ? excerpt(first.text, 100) : "Previous conversation",
+        preview: lastReply && lastReply !== first ? excerpt(lastReply.text, 180) : "",
+        at: messages.at(-1)!.at,
+        messages,
+      };
+    })
+    .sort((a, b) => b.at - a.at);
+}
