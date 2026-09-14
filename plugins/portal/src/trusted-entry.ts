@@ -84,6 +84,7 @@ export function createTrustedEntry(
       if (typeof claims.sub !== "string" || claims.sub !== info.sub)
         throw new Error("Trusted identity subject mismatch");
       return {
+        subject: claims.sub,
         sub: trustedPrincipal(cfg.issuer, claims.sub),
         name: typeof info.name === "string" ? info.name.trim().slice(0, 200) : "",
         returnTo: tmp.returnTo,

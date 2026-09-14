@@ -1,3 +1,4 @@
+import { provisionTrustedAdmin } from "./trusted-admin.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { pathToFileURL } from "node:url";
 import { ADMIN_LOGIN_SCRIPT, ADMIN_LOGIN_SCRIPT_HASH, openAdminLogin } from "./admin-login.ts";
@@ -205,6 +206,16 @@ const sessionKey = deriveKey(SESSION_SECRET ?? DEV_SECRET, "portal.session.v1");
 const tmpKey = deriveKey(SESSION_SECRET ?? DEV_SECRET, "portal.tmp.v1");
 const impersonateKey = deriveKey(SESSION_SECRET ?? DEV_SECRET, "portal.impersonate.v1");
 const trustedOidc = trustedEntryConfig(process.env, PUBLIC_URL);
+const trustedAdminEnabled = process.env.PORTAL_TRUSTED_OIDC_ADMIN === "1";
+if (
+  trustedAdminEnabled &&
+  (!trustedOidc ||
+    !CORE_SIGNING_SECRET ||
+    !PORTAL_IDENTITY_SECRET ||
+    PORTAL_IDENTITY_SECRET.length < 32 ||
+    PORTAL_IDENTITY_SECRET === CORE_SIGNING_SECRET)
+)
+  throw new Error("Trusted administrator provisioning requires trusted OIDC and a distinct portal identity secret");
 const trustedEntry = trustedOidc
   ? createTrustedEntry(trustedOidc, SESSION_SECRET ?? DEV_SECRET, (key, expiresAt) =>
       claimOnce(coreClaimStore(CORE, CORE_SIGNING_SECRET, "portal"), key, expiresAt),
@@ -1269,6 +1280,19 @@ async function trustedAuth(req: IncomingMessage, res: ServerResponse, url: URL):
   setSession(res, [clearCookie(cookieName, path, SECURE_COOKIES)]);
   try {
     const identity = await trustedEntry.finish(readCookie(req.headers.cookie, cookieName), url);
+    if (trustedAdminEnabled) {
+      await provisionTrustedAdmin(
+        {
+          core: CORE,
+          signingSecret: CORE_SIGNING_SECRET!,
+          identitySecret: PORTAL_IDENTITY_SECRET!,
+          org: ORG,
+          issuer: trustedOidc!.issuer,
+        },
+        identity.subject,
+      );
+      adminCache.delete(identity.sub);
+    }
     setAuthenticatedSession(res, identity.sub, identity.name);
     res.writeHead(302, {
       location: sanitizeReturnTo(identity.returnTo, PUBLIC_URL, APPS_DOMAIN),

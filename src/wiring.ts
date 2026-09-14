@@ -1367,7 +1367,7 @@ export function buildApp(
   const adminGrantStore = createAdminGrantStore(adminGrantPersist, {
     seed: bootAdminGrantSeed(config.adminGrants, config.orgId, !!config.databaseUrl),
   });
-  const admin = createAdminService(adminGrantStore);
+  const admin = createAdminService(adminGrantStore, { trustedOidcAdminIssuer: config.trustedOidcAdminIssuer });
   const { strategy: memoryStrategy, memory } = createMemoryStrategy(config.memoryStrategy, {
     harness: harness.models,
     memory: baseMemory,

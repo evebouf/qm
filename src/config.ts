@@ -85,6 +85,7 @@ export interface Config {
   piSystemCacheSplit: boolean;
   sessionTapeMode: "shadow" | "serve";
   adminGrants?: string;
+  trustedOidcAdminIssuer?: string;
   emailAuthPrincipals?: string[];
   emailAuthDomain?: string;
   resendApiKey?: string;
@@ -1272,6 +1273,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     ...(modelProvider ? { modelProvider } : {}),
     providerBaseUrls,
     ...(modelGateway ? { modelGateway } : {}),
+    ...(env.TRUSTED_OIDC_ADMIN_ISSUER ? { trustedOidcAdminIssuer: env.TRUSTED_OIDC_ADMIN_ISSUER } : {}),
     ...(env.ADMIN_GRANTS ? { adminGrants: env.ADMIN_GRANTS } : {}),
     ...(env.AUTH_ALLOWED_EMAILS
       ? {

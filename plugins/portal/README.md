@@ -47,7 +47,16 @@ restrictions do not apply to this separate route.
 The route verifies OIDC signature, issuer, audience, nonce, PKCE and subject binding,
 and consumes login state through core's durable replay store. Principals are scoped
 to the issuer and subject, without automatic linking to email or Slack identities.
-No administrator role is assigned. Company login and Slack integration retain their
+No administrator role is assigned by default. To provision administrators on this
+entry path, set `PORTAL_TRUSTED_OIDC_ADMIN=1` on portal and set core's
+`TRUSTED_OIDC_ADMIN_ISSUER` to the exact trusted issuer. This requires a distinct
+`PORTAL_IDENTITY_SECRET` and durable replay storage. After verified provider login,
+portal submits a short-lived, single-use, purpose-bound assertion; core creates a
+normal durable organization-admin grant before portal issues the session. Primary
+login and impersonation cannot request this promotion. Deactivated users stay blocked.
+Existing sessions need a fresh trusted sign-in. Revoking a grant removes admin access
+until the next successful trusted sign-in; disabling provisioning prevents future
+grants but does not remove existing ones. Company login and Slack integration retain their
 existing configuration. Deployment CLI secret wiring, account linking, and live
 qualification are pending; this is not a released deployment feature.
 
