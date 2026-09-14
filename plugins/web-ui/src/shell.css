@@ -10990,3 +10990,21 @@ h3.ambient-field-label {
   font-size: 13.5px;
   text-align: center;
 }
+
+.inbox-assistant-header {
+  gap: 12px;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.25;
+}
+.inbox-assistant-header :is(.inbox-assistant-title, .inbox-chat-header-title) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inbox-assistant-header > :is(.icon-btn, .inbox-chat-header-actions) {
+  flex: none;
+}

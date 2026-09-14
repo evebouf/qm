@@ -1321,6 +1321,7 @@ function inboxAssistantHost(): HTMLElement {
   host.className = "inbox-assistant-body";
   host.dataset.density = "compact";
   let working = false;
+  let title = "New conversation";
   const prefix = `web:${appState.me?.user ?? "anon"}:inbox:`;
   const storageKey = `qm-inbox-assistant:${appState.me?.user ?? "anon"}`;
   let saved: { threadRef: string; sessionId: string | null } | null = null;
@@ -1371,8 +1372,10 @@ function inboxAssistantHost(): HTMLElement {
     `,
     onState: (state) => {
       if (working && !state.working) void refreshInbox({ silent: true });
-      const changed = working !== state.working;
+      const nextTitle = inboxAssistantTitle();
+      const changed = working !== state.working || title !== nextTitle;
       working = state.working;
+      title = nextTitle;
       if (state.threadRef) {
         try {
           localStorage.setItem(storageKey, JSON.stringify({ threadRef: state.threadRef, sessionId: state.sessionId }));
@@ -1421,6 +1424,14 @@ function inboxAssistantHost(): HTMLElement {
   };
   queueMicrotask(() => void restore());
   return host;
+}
+
+function inboxAssistantTitle(): string {
+  const state = inboxAssistant?.conversation.state;
+  const session = sessionsState.list.find((entry) =>
+    state?.sessionId ? entry.id === state.sessionId : Boolean(state?.threadRef) && entry.threadRef === state?.threadRef,
+  );
+  return session?.title?.trim() || "New conversation";
 }
 
 function inboxAssistantBusy(): boolean {
@@ -1486,7 +1497,9 @@ function drawFull(): void {
             ${surfaceTpl(surface)}
             <aside class="inbox-item-aside inbox-list-aside" aria-label="Inbox assistant">
               <div class="inbox-assistant-header">
-                <span>Inbox assistant</span>
+                <span class="inbox-assistant-title" dir="auto" title=${inboxAssistantTitle()}
+                  >${inboxAssistantTitle()}</span
+                >
                 <button
                   class="icon-btn"
                   type="button"
