@@ -49,7 +49,13 @@ interface ItemTurnResult {
 
 export interface LoopFireService {
   fire(loopId: string, fireKey: string): Promise<LoopFireResult>;
-  followUp(loop: Loop, item: LoopItem, message: string, actorId: string): Promise<LoopItem | null>;
+  followUp(
+    loop: Loop,
+    item: LoopItem,
+    message: string,
+    actorId: string,
+    conversationId?: string,
+  ): Promise<LoopItem | null>;
   itemAction(loop: Loop, item: LoopItem, kind: string, args: Record<string, unknown>): Promise<ItemTurnResult>;
   shipOutput(loopId: string, outputId: string, actorId: string, note?: string): Promise<LoopOutput | null>;
   returnOutput(loopId: string, outputId: string, actorId: string, note: string): Promise<LoopOutput | null>;
@@ -646,8 +652,13 @@ export function createLoopFireService(deps: LoopFireDeps): LoopFireService {
     };
   }
 
-  async function followUp(loop: Loop, item: LoopItem, message: string, actorId: string): Promise<LoopItem | null> {
-    const conversationId = item.conversationId ?? "";
+  async function followUp(
+    loop: Loop,
+    item: LoopItem,
+    message: string,
+    actorId: string,
+    conversationId = item.conversationId ?? "",
+  ): Promise<LoopItem | null> {
     await deps.items.appendThread(item.id, [{ role: "human", text: message, actorId, conversationId }]);
     const asked = { ...((await deps.items.get(item.id)) ?? item), conversationId };
     const fireKey = `loop:${loop.id}:item:${item.id}:followup:${conversationId}:${Date.now()}`;
@@ -677,7 +688,7 @@ export function createLoopFireService(deps: LoopFireDeps): LoopFireService {
             by: "agent",
             ...(turn.sessionId ? { sessionId: turn.sessionId } : {}),
           },
-          { expectedConversationId: conversationId },
+          { expectedConversationId: item.conversationId ?? "" },
         );
       }
     }

@@ -390,7 +390,14 @@ async function followUpOnItem(ctx: ApiCtx): Promise<void> {
         error: "conflict",
         message: "The conversation changed. Review the current conversation and try again.",
       });
-    const next = await deps.fire.followUp(loop, current, message, loaded.actorId);
+    const historyId = body.historyConversationId;
+    if (
+      historyId !== undefined &&
+      (typeof historyId !== "string" || !current.thread?.some((entry) => (entry.conversationId ?? "") === historyId))
+    ) {
+      return sendJson(ctx.res, 400, { error: "bad_request", message: "Unknown past conversation for this item." });
+    }
+    const next = await deps.fire.followUp(loop, current, message, loaded.actorId, historyId);
     sendJson(ctx.res, 200, { item: ledgerItemView(next ?? item) });
   } catch (e) {
     sendJson(ctx.res, 502, { error: "followup_failed", message: errMessage(e) });

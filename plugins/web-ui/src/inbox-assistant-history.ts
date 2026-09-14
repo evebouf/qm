@@ -68,6 +68,7 @@ export function createInboxAssistantHistory(
           if (generation !== request) return;
           const container = document.createElement("div");
           container.className = "inbox-assistant-body inbox-assistant-history-transcript";
+          container.dataset.density = "compact";
           let working = false;
           const conversation = createConversation({
             pane: true,

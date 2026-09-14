@@ -10974,3 +10974,7 @@ h3.ambient-field-label {
 .inbox-assistant-history-transcript .chat-scroll {
   padding-inline: 0;
 }
+
+.inbox-assistant-history-transcript .chat-bottom-dock {
+  padding: 0;
+}

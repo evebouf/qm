@@ -1,5 +1,4 @@
 import { html, type TemplateResult } from "lit";
-import { inboxChatMessage } from "./inbox-chat-message";
 import { previousInboxConversations } from "./inbox-history";
 import type { InboxItem } from "./inbox";
 import { inboxHistoryList } from "./inbox-history-list";
@@ -37,7 +36,11 @@ export function openInboxHistory(item: InboxItem, opener: HTMLElement, redraw: (
   chatFor(item.id, view)?.querySelector<HTMLButtonElement>(".inbox-history-back")?.focus({ preventScroll: true });
 }
 
-export function inboxHistoryPanel(item: InboxItem, redraw: () => void): TemplateResult | null {
+export function inboxHistoryPanel(
+  item: InboxItem,
+  redraw: () => void,
+  renderConversation: (id: string, header: TemplateResult, onKeydown: (event: KeyboardEvent) => void) => TemplateResult,
+): TemplateResult | null {
   const view = views.get(item.id);
   if (!view) return null;
   const conversations = previousInboxConversations(item);
@@ -64,41 +67,29 @@ export function inboxHistoryPanel(item: InboxItem, redraw: () => void): Template
       .find((button) => button.dataset.historyId === selected.id)
       ?.focus({ preventScroll: true });
   };
+  const onKeydown = (event: KeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    back();
+  };
+  const header = inboxChatHeader({
+    title: selected?.title ?? "Past conversations",
+    className: "inbox-history-head",
+    back,
+    backLabel: selected ? "Back to past conversations" : "Back to conversation",
+    close: selected ? close : undefined,
+  });
+  if (selected) return renderConversation(selected.id, header, onKeydown);
   return html`
-    <div
-      class="inbox-chat inbox-history-panel"
-      data-inbox-item=${item.id}
-      @keydown=${(event: KeyboardEvent) => {
-        if (event.key !== "Escape") return;
-        event.preventDefault();
-        event.stopPropagation();
-        back();
-      }}
-    >
-      ${inboxChatHeader({
-        title: selected?.title ?? "Past conversations",
-        className: "inbox-history-head",
-        back,
-        backLabel: selected ? "Back to past conversations" : "Back to conversation",
-        close: selected ? close : undefined,
+    <div class="inbox-chat inbox-history-panel" data-inbox-item=${item.id} @keydown=${onKeydown}>
+      ${header}
+      ${inboxHistoryList(conversations, (id) => {
+        view.listScrollTop = chatFor(item.id, view)?.querySelector<HTMLElement>(".inbox-history-list")?.scrollTop ?? 0;
+        view.selectedId = id;
+        redraw();
+        chatFor(item.id, view)?.querySelector<HTMLTextAreaElement>(".inbox-chat-input")?.focus({ preventScroll: true });
       })}
-      ${
-        selected
-          ? html`
-              <div class="inbox-history-transcript" tabindex="0" aria-label="Conversation transcript">
-                ${selected.messages.map(inboxChatMessage)}
-              </div>
-            `
-          : inboxHistoryList(conversations, (id) => {
-              view.listScrollTop =
-                chatFor(item.id, view)?.querySelector<HTMLElement>(".inbox-history-list")?.scrollTop ?? 0;
-              view.selectedId = id;
-              redraw();
-              chatFor(item.id, view)
-                ?.querySelector<HTMLElement>(".inbox-history-transcript")
-                ?.focus({ preventScroll: true });
-            })
-      }
     </div>
   `;
 }

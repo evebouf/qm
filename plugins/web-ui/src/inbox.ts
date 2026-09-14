@@ -641,29 +641,38 @@ async function restartConversation(item: InboxItem, chat: HTMLElement | null): P
   }
 }
 
-export async function askAgent(item: InboxItem, message: string): Promise<void> {
+export async function askAgent(
+  item: InboxItem,
+  message: string,
+  conversationId = item.conversationId ?? "",
+): Promise<void> {
   const text = message.trim();
   if (!text || chatting.has(item.id)) return;
   chatting.add(item.id);
-  const draftKey = itemChatDraftKey(item);
+  const conversationItem = { ...item, conversationId };
+  const draftKey = itemChatDraftKey(conversationItem);
   chatDrafts.delete(draftKey);
   clearDraft(draftKey);
   pendingMessages.set(item.id, {
-    message: { id: crypto.randomUUID(), role: "human", text, at: Date.now(), conversationId: item.conversationId },
+    message: { id: crypto.randomUUID(), role: "human", text, at: Date.now(), conversationId },
     existingIds: new Set(item.thread.map((entry) => entry.id)),
   });
   drawAll();
   try {
     const { item: next } = await api<{ item: LedgerItem }>(actionPath(item, "followup"), {
       method: "POST",
-      body: JSON.stringify({ message: text, conversationId: item.conversationId ?? "" }),
+      body: JSON.stringify({
+        message: text,
+        conversationId: item.conversationId ?? "",
+        ...(conversationId !== (item.conversationId ?? "") ? { historyConversationId: conversationId } : {}),
+      }),
     });
     const mapped = toInboxItem(next);
     draftEdits.delete(item.id);
     replaceItem(mapped);
   } catch (e) {
     notify(`The agent couldn't answer: ${e instanceof Error ? e.message : e}`);
-    if (!chatDrafts.has(draftKey)) setItemChatDraft(item, text);
+    if (!chatDrafts.has(draftKey)) setItemChatDraft(conversationItem, text);
     if (e instanceof ApiError && e.status === 409) await refetchItem(item);
   } finally {
     pendingMessages.delete(item.id);
@@ -852,23 +861,32 @@ function inboxReplyHeading(item: InboxItem): string {
     : "What should this reply say?";
 }
 
-export function chatTpl(item: InboxItem): TemplateResult {
-  const history = inboxHistoryPanel(item, drawAll);
-  if (history) return history;
+export function chatTpl(
+  item: InboxItem,
+  historyConversation?: { id: string; header: TemplateResult; onKeydown: (event: KeyboardEvent) => void },
+): TemplateResult {
+  if (!historyConversation) {
+    const history = inboxHistoryPanel(item, drawAll, (id, header, onKeydown) =>
+      chatTpl(item, { id, header, onKeydown }),
+    );
+    if (history) return history;
+  }
+  const conversationId = historyConversation?.id ?? item.conversationId ?? "";
+  const conversationItem = { ...item, conversationId };
   const busy = chatting.has(item.id);
-  const pending = itemChatDraft(item);
+  const pending = itemChatDraft(conversationItem);
   const submit = (el: HTMLTextAreaElement): void => {
     if (busy) return;
     const text = el.value;
     el.value = "";
     autosizeChatInput(el);
-    void askAgent(item, text);
+    void askAgent(item, text, conversationId);
   };
-  const thread = item.thread.filter((message) => (message.conversationId ?? "") === (item.conversationId ?? ""));
+  const thread = item.thread.filter((message) => (message.conversationId ?? "") === conversationId);
   const optimistic = pendingMessages.get(item.id);
   if (
     optimistic &&
-    (optimistic.message.conversationId ?? "") === (item.conversationId ?? "") &&
+    (optimistic.message.conversationId ?? "") === conversationId &&
     !thread.some(
       (message) =>
         message.role === "human" && message.text === optimistic.message.text && !optimistic.existingIds.has(message.id),
@@ -877,31 +895,38 @@ export function chatTpl(item: InboxItem): TemplateResult {
     thread.push(optimistic.message);
   const empty = thread.length === 0;
   return html`
-    <div class="inbox-chat" data-inbox-item=${item.id}>
-      ${inboxChatHeader({
-        title: inboxConversationTitle(thread),
-        actions: html`
-          <button
-            type="button"
-            class="icon-btn"
-            aria-label="Previous conversations"
-            ${tip("Previous conversations")}
-            @click=${(event: MouseEvent) => openInboxHistory(item, event.currentTarget as HTMLElement, drawAll)}
-          >
-            ${icon(History, 16)}
-          </button>
-          <button
-            type="button"
-            class="icon-btn"
-            aria-label="New conversation"
-            ${tip("New conversation")}
-            ?disabled=${busy || acting.has(item.id) || empty}
-            @click=${(event: MouseEvent) => void restartConversation(item, (event.currentTarget as HTMLElement).closest(".inbox-chat"))}
-          >
-            ${icon(SquarePen, 16)}
-          </button>
-        `,
-      })}
+    <div
+      class="inbox-chat ${historyConversation ? "inbox-history-panel" : ""}"
+      data-inbox-item=${item.id}
+      @keydown=${historyConversation?.onKeydown ?? nothing}
+    >
+      ${
+        historyConversation?.header ??
+        inboxChatHeader({
+          title: inboxConversationTitle(thread),
+          actions: html`
+            <button
+              type="button"
+              class="icon-btn"
+              aria-label="Previous conversations"
+              ${tip("Previous conversations")}
+              @click=${(event: MouseEvent) => openInboxHistory(item, event.currentTarget as HTMLElement, drawAll)}
+            >
+              ${icon(History, 16)}
+            </button>
+            <button
+              type="button"
+              class="icon-btn"
+              aria-label="New conversation"
+              ${tip("New conversation")}
+              ?disabled=${busy || acting.has(item.id) || empty}
+              @click=${(event: MouseEvent) => void restartConversation(item, (event.currentTarget as HTMLElement).closest(".inbox-chat"))}
+            >
+              ${icon(SquarePen, 16)}
+            </button>
+          `,
+        })
+      }
       ${inboxState.notice ? html`<div class="inbox-notice" role="status">${inboxState.notice}</div>` : nothing}
       ${
         empty
@@ -914,14 +939,20 @@ export function chatTpl(item: InboxItem): TemplateResult {
                       class="inbox-chat-suggestion"
                       type="button"
                       ?disabled=${busy}
-                      @click=${() => void askAgent(item, prompt)}
+                      @click=${() => void askAgent(item, prompt, conversationId)}
                     >
                       ${prompt}
                     </button>`,
                 )}
               </div>
             </div>`
-          : html`<div class="inbox-chat-log">${thread.map(inboxChatMessage)}</div>`
+          : html`<div
+              class="inbox-chat-log ${historyConversation ? "inbox-history-transcript" : ""}"
+              tabindex="0"
+              aria-label="Conversation transcript"
+            >
+              ${thread.map(inboxChatMessage)}
+            </div>`
       }
       ${busy ? html`<div class="inbox-chat-working" role="status">${workingWave()}<span>Thinking…</span></div>` : nothing}
       <div class="inbox-chat-composer ${pending.trim() ? "has-text" : ""}">
@@ -932,8 +963,8 @@ export function chatTpl(item: InboxItem): TemplateResult {
           .value=${pending}
           @input=${(e: Event) => {
             const box = e.currentTarget as HTMLTextAreaElement;
-            const had = Boolean(itemChatDraft(item).trim());
-            setItemChatDraft(item, box.value);
+            const had = Boolean(itemChatDraft(conversationItem).trim());
+            setItemChatDraft(conversationItem, box.value);
             autosizeChatInput(box);
             if (had !== Boolean(box.value.trim())) drawAll();
           }}

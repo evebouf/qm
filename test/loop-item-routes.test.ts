@@ -863,3 +863,29 @@ test("an in-flight agent action blocks restart and retains its conversation on a
   assert.equal(after.conversationId, fresh.conversationId);
   assert.equal(after.thread!.at(-1)!.conversationId, "");
 });
+
+test("past item conversations can continue without switching the current conversation", async () => {
+  const w = world();
+  const { loop, item } = await seed(w);
+  await w.loops.items.appendThread(item.id, [{ role: "human", text: "Original conversation" }]);
+  const current = (await w.loops.items.restartConversation(item.id, ""))!;
+  let selected: string | undefined;
+  const followUp = w.loops.fire!.followUp;
+  w.loops.fire!.followUp = async (...args) => {
+    selected = args[4];
+    return followUp(...args);
+  };
+  const path = `/v1/loops/${loop.id}/items/${item.id}/followup`;
+  const body = { message: "Continue the original", conversationId: current.conversationId, historyConversationId: "" };
+  assert.equal((await call(w, { method: "POST", path, body })).status, 200);
+  assert.equal(selected, "");
+  assert.equal((await w.loops.items.get(item.id))!.conversationId, current.conversationId);
+  for (const historyConversationId of ["another-item-thread", null, 42]) {
+    assert.equal((await call(w, { method: "POST", path, body: { ...body, historyConversationId } })).status, 400);
+  }
+  assert.equal((await call(w, { method: "POST", path, body: { ...body, conversationId: "" } })).status, 409);
+  const token = (await w.loops.items.acquireDecision(item.id))!;
+  assert.equal((await call(w, { method: "POST", path, body })).status, 409);
+  await w.loops.items.releaseDecision(item.id, token);
+  assert.equal(w.followUps.length, 1);
+});
