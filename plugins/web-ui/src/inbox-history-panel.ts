@@ -67,6 +67,12 @@ export function inboxHistoryPanel(item: InboxItem, redraw: () => void): Template
       .find((button) => button.dataset.conversation === selected.id)
       ?.focus({ preventScroll: true });
   };
+  const selectConversation = (id: string) => {
+    view.listScrollTop = chatFor(item.id, view)?.querySelector<HTMLElement>(".inbox-history-list")?.scrollTop ?? 0;
+    view.selectedId = id;
+    redraw();
+    chatFor(item.id, view)?.querySelector<HTMLElement>(".inbox-history-transcript")?.focus({ preventScroll: true });
+  };
   return html`
     <div
       class="inbox-chat inbox-history-panel"
@@ -110,16 +116,7 @@ export function inboxHistoryPanel(item: InboxItem, redraw: () => void): Template
                             class="inbox-history-entry"
                             type="button"
                             data-conversation=${conversation.id}
-                            @click=${() => {
-                                        view.listScrollTop =
-                                          chatFor(item.id, view)?.querySelector<HTMLElement>(".inbox-history-list")
-                                            ?.scrollTop ?? 0;
-                                        view.selectedId = conversation.id;
-                                        redraw();
-                                        chatFor(item.id, view)
-                                          ?.querySelector<HTMLElement>(".inbox-history-transcript")
-                                          ?.focus({ preventScroll: true });
-                                      }}
+                            @click=${() => selectConversation(conversation.id)}
                           >
                             <div class="inbox-history-entry-copy">
                               <span class="inbox-history-entry-title">${conversation.title}</span>
