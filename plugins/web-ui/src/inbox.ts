@@ -9,18 +9,27 @@ import {
   Mail,
   RefreshCw,
   Send,
+  SquarePen,
   Undo2,
   X,
 } from "lucide";
-import { api, ApiError } from "./core-bridge";
-import { onInboxItemEvent, onInboxResync } from "./conversations";
+import { api, ApiError, fetchTranscript } from "./core-bridge";
+import {
+  createConversation,
+  disposeConversation,
+  ensureDeliveryStream,
+  onInboxItemEvent,
+  onInboxResync,
+} from "./conversations";
+import type { Conversation } from "./conv-types";
+import { saveDraft } from "./drafts";
 import { createInboxEventCoalescer, type InboxItemRef } from "./inbox-coalesce";
 import { charForName, ensureEmojiIndex } from "./emoji-picker";
 import type { DensityTier } from "./density";
 import { deepLinkPath, UI_BASE } from "./deep-link";
 import { appState, can } from "./shell-state";
 import { renderSidebarTop, switchView } from "./shell";
-import { openSession, sessionsState } from "./sessions";
+import { openSession, openSessionInto, refreshSessions, sessionsState } from "./sessions";
 import { splitMentions } from "./linkify";
 import { splitSlackWire } from "./slack-text";
 import { listBackLink } from "./list-page";
@@ -169,6 +178,8 @@ export function attachInboxSurface(surface: { redraw: () => void; visible: () =>
 }
 
 export function resetInboxState(): void {
+  if (inboxAssistant) disposeConversation(inboxAssistant.conversation);
+  inboxAssistant = null;
   inboxState.items = [];
   inboxState.loopId = null;
   inboxState.syncCron = null;
@@ -1243,6 +1254,127 @@ function drawSurface(surface: InboxSurface): void {
   sizeChatInputs(surface.host);
 }
 
+let inboxAssistant: { host: HTMLElement; conversation: Conversation } | null = null;
+
+function inboxAssistantHost(): HTMLElement {
+  if (inboxAssistant) return inboxAssistant.host;
+  const host = document.createElement("div");
+  host.className = "inbox-assistant-body";
+  host.dataset.density = "compact";
+  let working = false;
+  const prefix = `web:${appState.me?.user ?? "anon"}:inbox:`;
+  const storageKey = `qm-inbox-assistant:${appState.me?.user ?? "anon"}`;
+  let saved: { threadRef: string; sessionId: string | null } | null = null;
+  try {
+    const stored = JSON.parse(localStorage.getItem(storageKey) ?? "null");
+    if (typeof stored?.threadRef === "string" && stored.threadRef.startsWith(prefix))
+      saved = {
+        threadRef: stored.threadRef,
+        sessionId: typeof stored.sessionId === "string" ? stored.sessionId : null,
+      };
+  } catch {
+    void 0;
+  }
+  const conversation = createConversation({
+    pane: true,
+    ownsUrl: false,
+    container: () => host,
+    claimContainer: () => host,
+    visible: () => appState.currentView === "inbox" && host.isConnected,
+    density: () => "compact",
+    onDensityChange: () => {},
+    ensureDeliveryStream,
+    turnOptions: () => ({ inboxView: fullViewId === "gmail" || fullViewId === "slack" ? fullViewId : "all" }),
+    emptyState: () => html`
+      <div class="inbox-chat-empty">
+        <h2 class="inbox-chat-cta">How can I help with your inbox?</h2>
+        <p class="inbox-assistant-hint">
+          Find a message, decide what needs a reply, or work through your inbox together.
+        </p>
+        <div class="inbox-chat-suggest">
+          ${["What needs my attention?", "Help me find an email", "Help me triage"].map(
+            (text) => html`
+              <button
+                class="inbox-chat-suggestion"
+                @click=${() => {
+                  conversation.composer.state.draft = text;
+                  if (conversation.state.threadRef) saveDraft(conversation.state.threadRef, text);
+                  conversation.drawActiveChat();
+                  conversation.composer.focusComposerEnd();
+                }}
+              >
+                ${text}
+              </button>
+            `,
+          )}
+        </div>
+      </div>
+    `,
+    onState: (state) => {
+      if (working && !state.working) void refreshInbox({ silent: true });
+      const changed = working !== state.working;
+      working = state.working;
+      if (state.threadRef) {
+        try {
+          localStorage.setItem(storageKey, JSON.stringify({ threadRef: state.threadRef, sessionId: state.sessionId }));
+        } catch {
+          void 0;
+        }
+      }
+      if (changed) queueMicrotask(drawFull);
+    },
+  });
+  inboxAssistant = { host, conversation };
+  host.textContent = "Loading conversation…";
+  const restore = async (): Promise<void> => {
+    try {
+      if (saved) {
+        const transcript = saved.sessionId ? await fetchTranscript(saved.sessionId, { tailTurns: 25 }) : null;
+        if (!transcript?.session && !sessionsState.loaded && !(await refreshSessions({ silent: true })))
+          throw new Error("Could not load the conversation list.");
+        if (inboxAssistant?.conversation !== conversation) return;
+        const session = transcript?.session ?? sessionsState.list.find((entry) => entry.threadRef === saved!.threadRef);
+        if (session?.threadRef === saved.threadRef) {
+          await openSessionInto(conversation, session, transcript ? Promise.resolve(transcript) : undefined);
+          if (!conversation.state.agent) throw new Error("Could not load the conversation.");
+          return;
+        }
+      }
+      if (inboxAssistant?.conversation !== conversation) return;
+      conversation.mountContinuable(saved?.threadRef ?? `${prefix}${crypto.randomUUID()}`, null, null, []);
+    } catch (error) {
+      if (inboxAssistant?.conversation !== conversation) return;
+      if (error instanceof ApiError && error.status === 404) {
+        saved = null;
+        conversation.mountContinuable(`${prefix}${crypto.randomUUID()}`, null, null, []);
+      } else {
+        render(
+          html`<div class="inbox-assistant-load-error">
+            Could not load your conversation.
+            <button @click=${() => void restore()}>Retry</button>
+          </div>`,
+          host,
+        );
+      }
+    } finally {
+      drawFull();
+    }
+  };
+  queueMicrotask(() => void restore());
+  return host;
+}
+
+function inboxAssistantBusy(): boolean {
+  const conversation = inboxAssistant?.conversation;
+  return (
+    !conversation?.state.agent ||
+    conversation.hasLiveRun() ||
+    conversation.state.agent.state.isStreaming ||
+    Boolean(conversation.state.pendingSend) ||
+    conversation.composer.state.processingFiles
+  );
+}
+
 let fullSurface: InboxSurface | null = null;
 let asideObserver: ResizeObserver | null = null;
 let fullViewId = "all";
@@ -1274,6 +1406,7 @@ function drawFull(): void {
   syncItemUrl(fullSurface.selectedId);
   const host = fullSurface.host;
   const surface = fullSurface;
+  const assistantWasConnected = inboxAssistant?.host.isConnected ?? false;
   keepingChatLogsPinned(host, () =>
     render(
       openItem
@@ -1281,13 +1414,50 @@ function drawFull(): void {
         : html`
             <div class="pane-head">
               <h1 class="pane-title">Inbox</h1>
-              <div class="pane-head-actions">${syncLineTpl()}</div>
+              <div class="pane-head-actions">
+                <button
+                  class="inbox-assistant-jump"
+                  @click=${() => inboxAssistant?.host.scrollIntoView({ block: "start", behavior: "smooth" })}
+                >
+                  Ask AI
+                </button>
+                ${syncLineTpl()}
+              </div>
             </div>
             ${surfaceTpl(surface)}
+            <aside class="inbox-item-aside inbox-list-aside" aria-label="Inbox assistant">
+              <div class="inbox-assistant-header">
+                <span>Inbox assistant</span>
+                <button
+                  class="icon-btn"
+                  type="button"
+                  aria-label="New inbox conversation"
+                  ${tip("New conversation")}
+                  ?disabled=${inboxAssistantBusy()}
+                  @click=${() => {
+                    const conversation = inboxAssistant?.conversation;
+                    if (!conversation || inboxAssistantBusy()) return;
+                    conversation.mountContinuable(
+                      `web:${appState.me?.user ?? "anon"}:inbox:${crypto.randomUUID()}`,
+                      null,
+                      null,
+                      [],
+                    );
+                  }}
+                >
+                  ${icon(SquarePen, 16)}
+                </button>
+              </div>
+              ${inboxAssistantHost()}
+            </aside>
           `,
       host,
     ),
   );
+  if (!openItem && inboxAssistant) {
+    inboxAssistant.conversation.drawActiveChat();
+    if (!assistantWasConnected) inboxAssistant.conversation.resumeIfIdle();
+  }
   sizeAside(host);
   sizeChatInputs(host);
 }
