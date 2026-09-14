@@ -5,6 +5,13 @@ function excerpt(text: string, limit: number): string {
   return normalized.length > limit ? `${normalized.slice(0, limit - 1).trimEnd()}…` : normalized;
 }
 
+export function inboxConversationTitle(messages: readonly LedgerThreadMessage[]): string {
+  const first =
+    messages.find((message) => message.role === "human" && message.text.trim()) ??
+    messages.find((message) => message.text.trim());
+  return first ? excerpt(first.text, 100) : "";
+}
+
 export function previousInboxConversations(item: Pick<InboxItem, "thread" | "conversationId">) {
   const groups = new Map<string, LedgerThreadMessage[]>();
   for (const message of item.thread) {
@@ -23,7 +30,7 @@ export function previousInboxConversations(item: Pick<InboxItem, "thread" | "con
       const lastReply = messages.findLast((message) => message.role === "agent" && message.text.trim());
       return {
         id,
-        title: first ? excerpt(first.text, 100) : "Previous conversation",
+        title: inboxConversationTitle(messages) || "Previous conversation",
         preview: lastReply && lastReply !== first ? excerpt(lastReply.text, 180) : "",
         at: messages.at(-1)!.at,
         messages,

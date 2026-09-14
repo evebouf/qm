@@ -1,4 +1,5 @@
 import { html, type TemplateResult } from "lit";
+import { inboxChatMessage } from "./inbox-chat-message";
 import { previousInboxConversations } from "./inbox-history";
 import type { InboxItem } from "./inbox";
 import { inboxHistoryList } from "./inbox-history-list";
@@ -85,15 +86,7 @@ export function inboxHistoryPanel(item: InboxItem, redraw: () => void): Template
         selected
           ? html`
               <div class="inbox-history-transcript" tabindex="0" aria-label="Conversation transcript">
-                ${selected.messages.map(
-                  (message) =>
-                    html`<div class="inbox-chat-msg ${message.role}">
-                      <span class="sr-only"
-                        >${{ human: "You", agent: "Assistant", system: "System" }[message.role]}:</span
-                      >
-                      <span class="inbox-chat-text">${message.text}</span>
-                    </div>`,
-                )}
+                ${selected.messages.map(inboxChatMessage)}
               </div>
             `
           : inboxHistoryList(conversations, (id) => {

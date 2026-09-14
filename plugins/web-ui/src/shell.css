@@ -8495,6 +8495,9 @@ h3.ambient-field-label {
   flex-direction: column;
   font-size: 13.5px;
 }
+.inbox-chat-msg .assistant-body {
+  font-size: inherit;
+}
 .inbox-chat-msg.human {
   align-items: flex-end;
 }
