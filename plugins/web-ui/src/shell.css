@@ -964,7 +964,7 @@ a.chat-row-open {
 }
 .settings-brand-tile .brand-name {
   color: var(--cta-foreground);
-  font-size: 28px;
+  font-size: 22px;
 }
 .settings-group {
   display: flex;
