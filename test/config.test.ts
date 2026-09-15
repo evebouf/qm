@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { availableParallelism } from "node:os";
 import { resolve } from "node:path";
 import {
   harnessCarriedModelAuth,
@@ -290,7 +291,9 @@ test("production refuses missing, placeholder, or weak signing keys", () => {
 
 test("defaults come from CONFIG_DEFAULTS, set exactly once", () => {
   const def = loadConfig({});
+  assert.equal(def.workers, availableParallelism());
   assert.equal(def.workers, CONFIG_DEFAULTS.workers);
+  assert.equal(loadConfig({ WORKERS: "7" }).workers, 7);
   assert.equal(def.rateLimitPerWindow, CONFIG_DEFAULTS.rateLimitPerWindow);
   assert.equal(def.rateLimitWindowMs, CONFIG_DEFAULTS.rateLimitWindowMs);
   assert.equal(def.monitorPollMs, CONFIG_DEFAULTS.monitorPollMs);
