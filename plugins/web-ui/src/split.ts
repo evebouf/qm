@@ -50,7 +50,7 @@ import { attachTooltip, tip } from "./tooltip";
 import { icon, workingWave } from "./ui";
 import { contextsState, scopeTitle } from "./contexts";
 import type { DensityTier } from "./density";
-import { appState } from "./shell-state";
+import { appState, type Me } from "./shell-state";
 import { renderSidebarTop, switchView, syncDocumentTitle, syncUrlFromState } from "./shell";
 import { sleep } from "./chat";
 import {
@@ -124,7 +124,7 @@ let persistTimer: number | null = null;
 let remoteTimer: number | null = null;
 let remotePayload: { updatedAt: number } | null = null;
 let persistedUpdatedAt = 0;
-const dockviewFactory = lazyModule(() => import("dockview-core").then(({ createDockview }) => createDockview));
+export const dockviewFactory = lazyModule(() => import("dockview-core").then(({ createDockview }) => createDockview));
 
 export async function prepareCanvas(): Promise<boolean> {
   if (isPhone()) return false;
@@ -365,6 +365,44 @@ function edgeToDirection(edge: SplitEdge): "left" | "right" | "above" | "below" 
 }
 
 let phoneChangeGeneration = 0;
+const desktopPreparationAttempts = 2;
+
+function desktopTransitionIsCurrent(generation: number, identity: Me, viewGeneration: number): boolean {
+  return (
+    generation === phoneChangeGeneration &&
+    !isPhone() &&
+    appState.me === identity &&
+    appState.currentView === "chats" &&
+    appState.viewRenderSeq === viewGeneration
+  );
+}
+
+function restoreDesktopCanvas(generation: number, identity: Me, viewGeneration: number, attempt = 1): void {
+  if (!desktopTransitionIsCurrent(generation, identity, viewGeneration)) return;
+  void prepareCanvas()
+    .then((ready) => {
+      if (!ready || !desktopTransitionIsCurrent(generation, identity, viewGeneration)) return;
+      if (!suspended && splitState.active) return;
+      suspended = false;
+      loadPersistedSplit();
+      if (!splitState.active) return;
+
+      sessionsState.openingKey = null;
+      mainConversation().teardown();
+      mainConversation().composer.resetComposer();
+      if (!mountRestoredCanvas()) {
+        mainConversation().newChat();
+        return;
+      }
+      syncUrlFromState();
+      renderList();
+    })
+    .catch(() => {
+      if (attempt >= desktopPreparationAttempts || !desktopTransitionIsCurrent(generation, identity, viewGeneration))
+        return;
+      window.setTimeout(() => restoreDesktopCanvas(generation, identity, viewGeneration, attempt + 1), 0);
+    });
+}
 
 onPhoneChange((phone) => {
   const generation = ++phoneChangeGeneration;
@@ -391,26 +429,8 @@ onPhoneChange((phone) => {
     return;
   }
   const identity = appState.me;
-  if (!identity) return;
-  void prepareCanvas()
-    .then((ready) => {
-      if (!ready || generation !== phoneChangeGeneration || isPhone() || appState.me !== identity) return;
-      if (!suspended && splitState.active) return;
-      suspended = false;
-      loadPersistedSplit();
-      if (!splitState.active || appState.currentView !== "chats") return;
-
-      sessionsState.openingKey = null;
-      mainConversation().teardown();
-      mainConversation().composer.resetComposer();
-      if (!mountRestoredCanvas()) {
-        mainConversation().newChat();
-        return;
-      }
-      syncUrlFromState();
-      renderList();
-    })
-    .catch(() => void 0);
+  if (!identity || appState.currentView !== "chats") return;
+  restoreDesktopCanvas(generation, identity, appState.viewRenderSeq);
 });
 
 export function exitSplitIfActive(): void {

@@ -24,7 +24,8 @@ test("reset invalidates identity-bound loads and operations", () => {
   assert.equal(operations.beginMutation(), null);
   operations.finishMutation(currentMutation);
   assert.ok(operations.beginMutation());
-  assert.match(shellSource, /resetIdentityState\(\);\s*appState\.me = me;/);
+  assert.match(shellSource, /identityUser !== null && identityUser !== me\.user\) resetIdentityState\(\);/);
+  assert.match(shellSource, /identityUser = me\.user;\s*appState\.me = me;/);
   assert.match(shellSource, /deferredViewLoaders\.keychain\?\.reset\(\);/);
 });
 

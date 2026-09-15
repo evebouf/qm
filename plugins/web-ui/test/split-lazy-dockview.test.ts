@@ -192,3 +192,58 @@ test("the pre-shell barrier recovers when a phone boot becomes desktop before id
     await h.close();
   }
 });
+
+test("phone-to-desktop preparation retries once and restores without another resize", async () => {
+  const h = await harness(true);
+  try {
+    h.dom.window.localStorage.setItem("web-ui:split-canvas:v1", savedCanvas);
+    h.split.loadPersistedSplit();
+    const load = h.split.dockviewFactory.load.bind(h.split.dockviewFactory);
+    let attempts = 0;
+    h.split.dockviewFactory.load = () => {
+      attempts++;
+      return attempts === 1 ? Promise.reject(new Error("chunk unavailable")) : load();
+    };
+
+    h.changePhone(false);
+    await eventually(() => h.dom.window.document.querySelector(".split-canvas") !== null);
+
+    assert.equal(attempts, 2);
+    assert.equal(h.split.splitState.active, true);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a stale desktop preparation cannot mount after media, identity, or view changes", async () => {
+  for (const stale of ["media", "identity", "view"] as const) {
+    const h = await harness(true);
+    let release = (): void => {};
+    try {
+      h.dom.window.localStorage.setItem("web-ui:split-canvas:v1", savedCanvas);
+      h.split.loadPersistedSplit();
+      const load = h.split.dockviewFactory.load.bind(h.split.dockviewFactory);
+      let attempts = 0;
+      const blocked = new Promise<void>((resolve) => (release = resolve));
+      h.split.dockviewFactory.load = async () => {
+        attempts++;
+        await blocked;
+        return load();
+      };
+
+      h.changePhone(false);
+      await eventually(() => attempts === 1);
+      if (stale === "media") h.changePhone(true);
+      else if (stale === "identity") h.shell.appState.me = { user: "replacement", org: "test" };
+      else h.shell.switchView("settings");
+      release();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      assert.equal(h.dom.window.document.querySelector(".split-canvas"), null, stale);
+      assert.equal(attempts, 1, stale);
+    } finally {
+      release();
+      await h.close();
+    }
+  }
+});

@@ -11,6 +11,10 @@ interface Control {
   importBlock: Promise<void> | null;
   opened: string[];
   rendered: number;
+  blockMemory: boolean;
+  memoryByIdentity: Record<string, string>;
+  memoryLoads: string[];
+  memoryRequests: Array<{ identity: string; release(): void }>;
 }
 
 interface Harness {
@@ -48,6 +52,10 @@ async function harness(path: string, virtualCron: "none" | "block" | "fail" = "n
     importBlock: null,
     opened: [],
     rendered: 0,
+    blockMemory: false,
+    memoryByIdentity: { "user-a": "Memory A", "user-b": "Memory B" },
+    memoryLoads: [],
+    memoryRequests: [],
   };
   let moduleLoadAttempts = 0;
   const timers = new Set<ReturnType<typeof setTimeout>>();
@@ -88,7 +96,12 @@ async function harness(path: string, virtualCron: "none" | "block" | "fail" = "n
       });
     }
     if (url === "/api/deployments") return Response.json({ deployments: [] });
-    if (url === "/api/memory") return Response.json({ content: "", revision: "1" });
+    if (url === "/api/memory") {
+      const identity = control.identity;
+      control.memoryLoads.push(identity);
+      if (control.blockMemory) await new Promise<void>((release) => control.memoryRequests.push({ identity, release }));
+      return Response.json({ content: control.memoryByIdentity[identity] ?? "", revision: "1" });
+    }
     if (url.startsWith("/api/skills")) return Response.json({ skills: [] });
     return Response.json({});
   };
@@ -285,6 +298,98 @@ test("a 401 then dev sign-in clears loaded identity-bound keychain data", async 
     await eventually(() => /user-b-credential/.test(h.document.querySelector("#main")?.textContent ?? ""));
   } finally {
     releaseOverview?.();
+    await h.close();
+  }
+});
+
+function editMemory(document: Document, value: string): void {
+  const editor = document.querySelector<HTMLTextAreaElement>(".memory-text");
+  assert.ok(editor);
+  editor.value = value;
+  editor.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function submitDevSignin(document: Document, identity: string): void {
+  const input = document.querySelector<HTMLInputElement>("#dev-principal");
+  assert.ok(input?.form);
+  input.value = identity;
+  input.form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+}
+
+test("same-user reauthentication preserves an unsaved memory draft", async () => {
+  const h = await harness("/memory");
+  try {
+    await h.boot();
+    editMemory(h.document, "Unsaved A draft");
+    assert.match(h.document.querySelector("#main")?.textContent ?? "", /Unsaved changes/);
+
+    h.control.signedIn = false;
+    await assert.rejects(h.core.api("/force-401"));
+    assert.match(h.document.querySelector("#app")?.textContent ?? "", /Dev sign-in/);
+
+    submitDevSignin(h.document, "user-a");
+    await eventually(
+      () =>
+        h.shell.appState.me?.user === "user-a" &&
+        h.document.querySelector<HTMLTextAreaElement>(".memory-text")?.value === "Unsaved A draft",
+    );
+    assert.deepEqual(h.control.memoryLoads, ["user-a"]);
+    assert.match(h.document.querySelector("#main")?.textContent ?? "", /Unsaved changes/);
+  } finally {
+    await h.close();
+  }
+});
+
+test("a different principal cannot inherit the prior user's unsaved memory draft", async () => {
+  const h = await harness("/memory");
+  try {
+    await h.boot();
+    editMemory(h.document, "Private draft for A");
+
+    h.control.signedIn = false;
+    await assert.rejects(h.core.api("/force-401"));
+    h.control.identity = "user-b";
+    h.control.blockMemory = true;
+    submitDevSignin(h.document, "user-b");
+
+    await eventually(() => h.control.memoryRequests.some((request) => request.identity === "user-b"));
+    assert.doesNotMatch(h.document.querySelector("#app")?.textContent ?? "", /Private draft for A/);
+    h.control.memoryRequests.find((request) => request.identity === "user-b")!.release();
+    await eventually(
+      () =>
+        h.shell.appState.me?.user === "user-b" &&
+        h.document.querySelector<HTMLTextAreaElement>(".memory-text")?.value === "Memory B",
+    );
+    assert.deepEqual(h.control.memoryLoads, ["user-a", "user-b"]);
+  } finally {
+    for (const request of h.control.memoryRequests) request.release();
+    await h.close();
+  }
+});
+
+test("a pending memory load from the prior principal cannot replace the new principal's memory", async () => {
+  const h = await harness("/memory");
+  h.control.blockMemory = true;
+  try {
+    const firstBoot = h.boot();
+    await eventually(() => h.control.memoryRequests.some((request) => request.identity === "user-a"));
+
+    h.control.signedIn = false;
+    await assert.rejects(h.core.api("/force-401"));
+    h.control.identity = "user-b";
+    submitDevSignin(h.document, "user-b");
+    await eventually(() => h.control.memoryRequests.some((request) => request.identity === "user-b"));
+
+    h.control.memoryRequests.find((request) => request.identity === "user-b")!.release();
+    await eventually(() => h.document.querySelector<HTMLTextAreaElement>(".memory-text")?.value === "Memory B");
+    h.control.memoryRequests.find((request) => request.identity === "user-a")!.release();
+    await firstBoot;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(h.document.querySelector<HTMLTextAreaElement>(".memory-text")?.value, "Memory B");
+    assert.equal(h.shell.appState.me?.user, "user-b");
+  } finally {
+    for (const request of h.control.memoryRequests) request.release();
     await h.close();
   }
 });

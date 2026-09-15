@@ -124,9 +124,11 @@ let shellMounted = false;
 let authGeneration = 0;
 let bootGeneration = 0;
 let navigationRevision = 0;
+let identityUser: string | null = null;
 
 interface DeferredViewModule {
   clearNotice?(): void;
+  invalidateIdentity?(): void;
   noteConnectorResult?(provider: string, status: string): void;
   open?(item: string): void;
   render(): void | Promise<void>;
@@ -179,7 +181,11 @@ export const deferredViewLoaders: Partial<Record<View, LazyModule<DeferredViewMo
   memory: lazyModule(
     async () => {
       const module = await import("./memory");
-      return { render: module.renderMemory, resetIdentity: module.resetMemoryState };
+      return {
+        invalidateIdentity: module.invalidateMemoryRequests,
+        render: module.renderMemory,
+        resetIdentity: module.resetMemoryState,
+      };
     },
     (module) => module.resetIdentity?.(),
   ),
@@ -203,15 +209,28 @@ export const deferredViewLoaders: Partial<Record<View, LazyModule<DeferredViewMo
   }),
 };
 
+function invalidateIdentityState(): void {
+  deferredViewLoaders.keychain?.reset();
+  deferredViewLoaders.memory?.loaded()?.invalidateIdentity?.();
+}
+
 function resetIdentityState(): void {
   deferredViewLoaders.keychain?.reset();
   deferredViewLoaders.memory?.reset();
+}
+
+function loseIdentity(): void {
+  authGeneration++;
+  appState.viewRenderSeq++;
+  invalidateIdentityState();
+  appState.me = null;
 }
 
 function clearIdentity(): void {
   authGeneration++;
   appState.viewRenderSeq++;
   resetIdentityState();
+  identityUser = null;
   appState.me = null;
 }
 
@@ -233,7 +252,7 @@ function navigationIsCurrent(intent: NavigationIntent): boolean {
 }
 
 setSigninRequiredHandler((detail) => {
-  clearIdentity();
+  loseIdentity();
   authMode = detail.mode ?? authMode;
   renderAuthGate(gateFor(authMode, detail.reason));
 });
@@ -1058,6 +1077,7 @@ export async function boot(): Promise<void> {
   const attempt = ++bootGeneration;
   const generation = ++authGeneration;
   appState.viewRenderSeq++;
+  invalidateIdentityState();
   const startupRevision = navigationRevision;
   const startupUrl = currentUrl();
   const bootIsCurrent = (): boolean => attempt === bootGeneration && generation === authGeneration;
@@ -1091,7 +1111,7 @@ export async function boot(): Promise<void> {
   if (r.status === 401) {
     const body = (await r.json().catch(() => ({}))) as SigninRequired;
     if (!bootIsCurrent()) return;
-    resetIdentityState();
+    invalidateIdentityState();
     appState.me = null;
     authMode = body.mode ?? "portal";
     renderAuthGate(gateFor(authMode, body.reason));
@@ -1103,7 +1123,8 @@ export async function boot(): Promise<void> {
   }
   const me = (await r.json()) as Me;
   if (!bootIsCurrent()) return;
-  resetIdentityState();
+  if (identityUser !== null && identityUser !== me.user) resetIdentityState();
+  identityUser = me.user;
   appState.me = me;
   authMode = appState.me.mode ?? "portal";
   clearPortalAttempt();
