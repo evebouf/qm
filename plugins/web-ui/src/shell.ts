@@ -1032,13 +1032,6 @@ window.addEventListener("focus", () => {
   else if (appState.currentView === "chats") void refreshSessions({ silent: true, refreshContexts: true });
 });
 
-function warmDeferredChunks(): void {
-  const warm = (): void => void import("@earendil-works/pi-web-ui").catch(() => {});
-  const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback;
-  if (ric) ric(warm);
-  else setTimeout(warm, 1500);
-}
-
 function openAppEditChat(slug: string): void {
   const user = appState.me?.user ?? "anon";
   const threadRef = `web:${user}:app-edit:${slug}`;
@@ -1135,7 +1128,6 @@ export async function boot(): Promise<void> {
   mountShell();
   shellMounted = true;
   ensureDeliveryStream();
-  warmDeferredChunks();
   void refreshInbox({ silent: true });
   loadPersistedSplit();
   await adoptRemoteSplit(remoteSplitFetch);
