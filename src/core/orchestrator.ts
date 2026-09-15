@@ -67,7 +67,7 @@ import {
 } from "../credentials/connector-status.ts";
 import { renderComputerBlock, renderResidentLoginsBlock, renderConnectedAppsBlock } from "./environment-facts.ts";
 import { PROVIDERS } from "../connectors/oauth.ts";
-import { budgetInvocationId, createModelUsageMeter, estimateCostUsd } from "../ratelimit/budget.ts";
+import { budgetInvocationId, createModelUsageMeter } from "../ratelimit/budget.ts";
 import {
   mintCapabilityToken,
   CAPABILITY_TTL_MS,
@@ -2001,8 +2001,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             ...(turnUsageMeter ? { usageMeter: turnUsageMeter } : {}),
             recordModelCall: (rec) => {
               deps.modelGateway.recordCall({ at: Date.now(), scopeLabel: scopeId, ...rec });
-              if (deps.defaultHarness === "claude")
-                void deps.budget?.record(actor.id, estimateCostUsd(rec.inputTokens));
             },
           });
           detectMs = Date.now() - detectStart;
@@ -3148,8 +3146,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             ...(turnUsageMeter ? { usageMeter: turnUsageMeter } : {}),
             recordModelCall: (rec) => {
               deps.modelGateway.recordCall({ at: Date.now(), scopeLabel: scopeId, ...rec });
-              if ((requestedRuntime.harnessId ?? deps.defaultHarness) === "claude")
-                void deps.budget?.record(actor.id, estimateCostUsd(rec.inputTokens));
             },
             recordLlmRequest: async (rec, signal) => {
               try {

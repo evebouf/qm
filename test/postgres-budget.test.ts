@@ -1,6 +1,8 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { createPostgresBudgetTracker } from "../src/ratelimit/postgres-budget.ts";
+import { createModelUsageMeter } from "../src/ratelimit/budget.ts";
+import { setCustomProviders } from "../src/model/custom-providers.ts";
 
 const URL = process.env.DATABASE_URL;
 const skip = URL ? false : "set DATABASE_URL (a Postgres) to run the Postgres budget tests";
@@ -60,9 +62,17 @@ test("pg budget: reservation survives tracker restart and settlement refunds or 
 
 test("pg budget: operation replay is idempotent and conflicting reuse or settlement fails", { skip }, async () => {
   const a = createPostgresBudgetTracker(URL!, { limitUsd: 1, windowMs: 60_000 });
-  const request = { operationId: "run:attempt:0", principalId: "U1", model: "m", reservedUsd: 1 };
+  const request = {
+    operationId: "run:attempt:0",
+    principalId: "U1",
+    model: "m",
+    reservedUsd: 1,
+    priceBasis: "old-basis",
+  };
   assert.equal((await a.reserve({ ...request, now: 1000 })).allowed, true);
-  assert.equal((await a.reserve({ ...request, now: 1000 })).allowed, true);
+  const replay = await a.reserve({ ...request, reservedUsd: 7, priceBasis: "new-basis", now: 1000 });
+  assert.equal(replay.allowed, true);
+  assert.equal(replay.priceBasis, "old-basis");
   assert.equal((await a.check("U1", 1000)).spentUsd, 1);
   await assert.rejects(a.reserve({ ...request, model: "other", now: 1000 }), /identity conflict/);
   await a.settle({ operationId: request.operationId, principalId: "U1", model: "m", settledUsd: 0.5 });
@@ -71,6 +81,61 @@ test("pg budget: operation replay is idempotent and conflicting reuse or settlem
     a.settle({ operationId: request.operationId, principalId: "U1", model: "m", settledUsd: 0.6 }),
     /settlement conflict/,
   );
+});
+
+test("pg budget: a restarted replay uses its quote after model removal and repricing", { skip }, async () => {
+  const provider = (rate: number) => ({
+    id: "pg-price-test",
+    name: "PG Price Test",
+    protocol: "anthropic" as const,
+    baseUrl: "https://pg-price.test/v1",
+    models: [{ id: "pg-price-test/model", input: rate, output: rate, cacheRead: rate, cacheWrite: rate }],
+  });
+  try {
+    setCustomProviders([provider(1)]);
+    const first = createPostgresBudgetTracker(URL!, { limitUsd: 100, windowMs: 60_000 });
+    await createModelUsageMeter(first, "U1", "stable-pg")!.reserve("pg-price-test/model", 1_000_000);
+    setCustomProviders([]);
+    const restarted = createPostgresBudgetTracker(URL!, { limitUsd: 100, windowMs: 60_000 });
+    await assert.rejects(
+      createModelUsageMeter(restarted, "U2", "stable-pg")!.reserve("pg-price-test/model", 1_000_000),
+      /identity conflict/,
+    );
+    await assert.rejects(
+      createModelUsageMeter(restarted, "U1", "stable-pg")!.reserve("pg-price-test/other", 1_000_000),
+      /identity conflict/,
+    );
+    await assert.rejects(
+      createModelUsageMeter(restarted, "U1", "new-pg")!.reserve("pg-price-test/model", 1_000_000),
+      /unpriced model request/,
+    );
+    const replay = createModelUsageMeter(restarted, "U1", "stable-pg")!;
+    const operationId = await replay.reserve("pg-price-test/model", 1_000_000);
+    setCustomProviders([provider(9)]);
+    await replay.settle(operationId, "pg-price-test/model", {
+      input: 2_000_000,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    });
+    assert.equal((await restarted.check("U1")).spentUsd, 2);
+  } finally {
+    setCustomProviders([]);
+  }
+});
+
+test("pg budget: checkpoints, legacy rows, and operation rows share one effective total", { skip }, async () => {
+  const a = createPostgresBudgetTracker(URL!, { limitUsd: 10, orgLimitUsd: 6, windowMs: 60_000 });
+  await a.record("U1", 2, 1000);
+  await a.reserve({ operationId: "progress:0", principalId: "U1", model: "m", reservedUsd: 1, now: 1000 });
+  await a.checkpoint({ operationId: "progress:0", principalId: "U1", model: "m", knownUsd: 4, now: 1100 });
+  assert.equal((await a.check("U1", 1100)).spentUsd, 6);
+  assert.deepEqual(await a.check("U2", 1100), { allowed: false, spentUsd: 6, limitUsd: 6, reason: "limit" });
+  await a.checkpoint({ operationId: "progress:0", principalId: "U1", model: "m", knownUsd: 3, now: 1200 });
+  assert.equal((await a.check("U1", 1200)).spentUsd, 6);
+  await a.settle({ operationId: "progress:0", principalId: "U1", model: "m", settledUsd: 1, now: 1300 });
+  await a.checkpoint({ operationId: "progress:0", principalId: "U1", model: "m", knownUsd: 8, now: 1400 });
+  assert.equal((await a.check("U1", 1400)).spentUsd, 3);
 });
 
 test(

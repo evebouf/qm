@@ -19,7 +19,7 @@ import {
   planCompaction,
   recentEntryCountWithinBudget,
 } from "../../harness/context-compaction.ts";
-import { budgetInvocationId, createModelUsageMeter, estimateCostUsd } from "../../ratelimit/budget.ts";
+import { budgetInvocationId, createModelUsageMeter } from "../../ratelimit/budget.ts";
 import { errMessage } from "../../util/errors.ts";
 import { createKeyedQueue } from "../../util/async.ts";
 import type { OrchestratorDeps } from "./types.ts";
@@ -101,7 +101,6 @@ export function createCompaction(deps: OrchestratorDeps): CompactionContext {
       ),
       recordModelCall: (rec) => {
         deps.modelGateway.recordCall({ at: Date.now(), scopeLabel: summaryLabel, ...rec });
-        if (deps.defaultHarness === "claude") void deps.budget?.record(input.actorId, estimateCostUsd(rec.inputTokens));
       },
     });
     const text = boundCompactSummary(raw, plan.toSummarize);

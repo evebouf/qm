@@ -42,6 +42,9 @@ export function createPostgresBudgetTracker(
           model TEXT NOT NULL,
           reserved_at BIGINT NOT NULL,
           reserved_usd DOUBLE PRECISION NOT NULL CHECK (reserved_usd >= 0 AND reserved_usd < 'Infinity'::float8),
+          known_usd DOUBLE PRECISION NOT NULL DEFAULT 0 CHECK (known_usd >= 0 AND known_usd < 'Infinity'::float8),
+          checkpoint_at BIGINT,
+          price_basis TEXT NOT NULL,
           settled_at BIGINT,
           settled_usd DOUBLE PRECISION CHECK (settled_usd >= 0 AND settled_usd < 'Infinity'::float8)
         )`,
@@ -61,7 +64,7 @@ export function createPostgresBudgetTracker(
 
   async function operationSpent(client: PoolClient | null, principalId: string, cutoff: number): Promise<number> {
     const org = principalId === orgKey;
-    const text = `SELECT COALESCE(SUM(COALESCE(settled_usd, reserved_usd)), 0) AS spent
+    const text = `SELECT COALESCE(SUM(COALESCE(settled_usd, GREATEST(reserved_usd, known_usd))), 0) AS spent
       FROM budget_operations WHERE reserved_at >= $1${org ? "" : " AND principal_id = $2"}`;
     const params = org ? [cutoff] : [cutoff, principalId];
     const rows = client ? (await client.query(text, params)).rows : await pg.q(text, params);
@@ -101,6 +104,30 @@ export function createPostgresBudgetTracker(
         console.error("[budget] failed to persist spend:", errMessage(err));
       }
     },
+    async lookupReservation(input) {
+      const now = input.now ?? Date.now();
+      return withPgTransaction(await pg.pool(), async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", ["budget:@org"]);
+        await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`budget:${input.principalId}`]);
+        const prior = await client.query<{
+          principal_id: string;
+          model: string;
+          price_basis: string;
+        }>("SELECT principal_id, model, price_basis FROM budget_operations WHERE operation_id = $1", [
+          input.operationId,
+        ]);
+        const existing = prior.rows[0];
+        if (!existing) return undefined;
+        if (existing.principal_id !== input.principalId || existing.model !== input.model)
+          throw new Error(`budget operation identity conflict: ${input.operationId}`);
+        return {
+          allowed: true,
+          spentUsd: await spent(client, input.principalId, now),
+          limitUsd,
+          priceBasis: existing.price_basis,
+        };
+      });
+    },
     async reserve(input) {
       assertAmount(input.reservedUsd, "reservedUsd");
       const now = input.now ?? Date.now();
@@ -110,36 +137,80 @@ export function createPostgresBudgetTracker(
         const prior = await client.query<{
           principal_id: string;
           model: string;
-          reserved_usd: number;
-        }>("SELECT principal_id, model, reserved_usd FROM budget_operations WHERE operation_id = $1", [
+          price_basis: string;
+        }>("SELECT principal_id, model, price_basis FROM budget_operations WHERE operation_id = $1", [
           input.operationId,
         ]);
         const existing = prior.rows[0];
         if (existing) {
-          if (
-            existing.principal_id !== input.principalId ||
-            existing.model !== input.model ||
-            Number(existing.reserved_usd) !== input.reservedUsd
-          )
+          if (existing.principal_id !== input.principalId || existing.model !== input.model)
             throw new Error(`budget operation identity conflict: ${input.operationId}`);
-          return { allowed: true, spentUsd: await spent(client, input.principalId, now), limitUsd };
+          return {
+            allowed: true,
+            spentUsd: await spent(client, input.principalId, now),
+            limitUsd,
+            priceBasis: existing.price_basis,
+          };
         }
         const principalSpent = await spent(client, input.principalId, now);
-        if (principalSpent >= limitUsd) return { allowed: false, spentUsd: principalSpent, limitUsd, reason: "limit" };
+        if (principalSpent >= limitUsd)
+          return {
+            allowed: false,
+            spentUsd: principalSpent,
+            limitUsd,
+            reason: "limit",
+            priceBasis: input.priceBasis ?? "",
+          };
         const orgSpent = await spent(client, orgKey, now);
         if (orgSpent >= orgLimitUsd)
-          return { allowed: false, spentUsd: orgSpent, limitUsd: orgLimitUsd, reason: "limit" };
+          return {
+            allowed: false,
+            spentUsd: orgSpent,
+            limitUsd: orgLimitUsd,
+            reason: "limit",
+            priceBasis: input.priceBasis ?? "",
+          };
+        const priceBasis = input.priceBasis ?? "";
         await client.query(
-          `INSERT INTO budget_operations(operation_id, principal_id, model, reserved_at, reserved_usd)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [input.operationId, input.principalId, input.model, now, input.reservedUsd],
+          `INSERT INTO budget_operations(operation_id, principal_id, model, reserved_at, reserved_usd, price_basis)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [input.operationId, input.principalId, input.model, now, input.reservedUsd, priceBasis],
         );
-        return { allowed: true, spentUsd: principalSpent + input.reservedUsd, limitUsd };
+        return { allowed: true, spentUsd: principalSpent + input.reservedUsd, limitUsd, priceBasis };
+      });
+    },
+    async checkpoint(input) {
+      assertAmount(input.knownUsd, "knownUsd");
+      await withPgTransaction(await pg.pool(), async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", ["budget:@org"]);
+        await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`budget:${input.principalId}`]);
+        const result = await client.query<{
+          principal_id: string;
+          model: string;
+          settled_usd: number | null;
+        }>(
+          `SELECT principal_id, model, settled_usd FROM budget_operations
+           WHERE operation_id = $1 FOR UPDATE`,
+          [input.operationId],
+        );
+        const existing = result.rows[0];
+        if (!existing) throw new Error(`budget reservation not found: ${input.operationId}`);
+        if (existing.principal_id !== input.principalId || existing.model !== input.model)
+          throw new Error(`budget operation identity conflict: ${input.operationId}`);
+        if (existing.settled_usd === null)
+          await client.query(
+            `UPDATE budget_operations
+             SET checkpoint_at = $2, known_usd = GREATEST(known_usd, $3)
+             WHERE operation_id = $1`,
+            [input.operationId, input.now ?? Date.now(), input.knownUsd],
+          );
       });
     },
     async settle(input) {
       assertAmount(input.settledUsd, "settledUsd");
       await withPgTransaction(await pg.pool(), async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", ["budget:@org"]);
+        await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`budget:${input.principalId}`]);
         const result = await client.query<{
           principal_id: string;
           model: string;

@@ -7,7 +7,7 @@ import {
   UNSCREENED_REASON,
   type SecurityScreenVerdict,
 } from "../../security/security-posture.ts";
-import { createModelUsageMeter, estimateCostUsd } from "../../ratelimit/budget.ts";
+import { createModelUsageMeter } from "../../ratelimit/budget.ts";
 import type { HarnessLlmRequestRecord } from "../../harness/harness.ts";
 import { swallowAs } from "../../util/errors.ts";
 import { sleep } from "../../util/async.ts";
@@ -58,8 +58,6 @@ export function createSecurityClassifier(deps: OrchestratorDeps): SecurityClassi
           usageMeter: createModelUsageMeter(deps.budget, actorId, `security:${requestId}:model`),
           recordModelCall: (rec) => {
             deps.modelGateway.recordCall({ at: Date.now(), scopeLabel, ...rec });
-            if ((flagger?.harnessId ?? deps.defaultHarness) === "claude")
-              void deps.budget?.record(actorId, estimateCostUsd(rec.inputTokens));
           },
           ...(recordLlmRequest ? { recordLlmRequest } : {}),
         });

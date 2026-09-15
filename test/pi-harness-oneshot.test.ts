@@ -310,6 +310,7 @@ test("oneShot completes an authenticated Pi 0.82 turn", async (t) => {
       metered.push({ operationId: "aux:0", model: modelId, input });
       return "aux:0";
     },
+    async checkpoint() {},
     async settle(operationId: string, modelId: string, usage: { output: number }) {
       metered.push({ operationId, model: modelId, input: 0, output: usage.output });
     },

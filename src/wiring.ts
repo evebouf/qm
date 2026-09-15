@@ -103,7 +103,7 @@ import { createAuditLog, type AuditLog } from "./audit/audit-log.ts";
 import { createPostgresAuditLog } from "./admin/postgres-audit-log.ts";
 import { createRateLimiter, type RateLimiter } from "./ratelimit/rate-limiter.ts";
 import { createPostgresRateLimiter } from "./ratelimit/postgres-rate-limiter.ts";
-import { budgetInvocationId, createBudgetTracker, createModelUsageMeter, estimateCostUsd } from "./ratelimit/budget.ts";
+import { budgetInvocationId, createBudgetTracker, createModelUsageMeter } from "./ratelimit/budget.ts";
 import type { SecurityScreenProbe } from "./security/security-screener.ts";
 import { createPostgresBudgetTracker } from "./ratelimit/postgres-budget.ts";
 import { createCronStore, type CronStore } from "./cron/cron-store.ts";
@@ -1789,8 +1789,6 @@ export function buildApp(
           usageMeter: createModelUsageMeter(budget, actorId, budgetInvocationId(`security-probe:${scopeLabel}`)),
           recordModelCall: (rec) => {
             modelGateway.recordCall({ at: Date.now(), scopeLabel, ...rec });
-            if ((harnessId ?? config.harness) === "claude")
-              void budget?.record(actorId, estimateCostUsd(rec.inputTokens));
           },
         })
     : undefined;

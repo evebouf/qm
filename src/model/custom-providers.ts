@@ -143,7 +143,9 @@ let version = 0;
 export function customModelPricingKnown(id: string): boolean {
   const custom = providers.flatMap((provider) => provider.models).find((model) => model.id === id);
   if (!custom) return true;
-  return [custom.input, custom.output, custom.cacheRead, custom.cacheWrite].every((value) => value !== undefined);
+  return [custom.input, custom.output, custom.cacheRead, custom.cacheWrite].every(
+    (value) => typeof value === "number" && Number.isFinite(value) && value >= 0,
+  );
 }
 
 export function setCustomProviders(specs: CustomProviderSpec[]): void {
