@@ -2,7 +2,7 @@ import type { Principal, ScopeId } from "../types.ts";
 import type { TapeRecord } from "../sessions/session-store.ts";
 import { deliveryNote, legacyDeliveryNoteManifest } from "../core/attachments.ts";
 import { principalEntitledToScope } from "../resolution/context-filter.ts";
-import { CONTEXT_SUMMARY_HEADER, INTERRUPTED_TOOL_RESULT } from "./context-compaction.ts";
+import { CONTEXT_SUMMARY_HEADER, INTERRUPTED_TOOL_RESULT, EXPIRED_MEMORY_RESULT } from "./context-compaction.ts";
 
 export function filterTapeForAudience(
   rows: readonly TapeRecord[],
@@ -212,6 +212,24 @@ function healDanglingCalls(out: unknown[], at: number): void {
   }
 }
 
+function replayMessage(message: unknown, bareText?: string): unknown {
+  const msg = message as { role?: string; toolName?: string; content?: unknown } | null;
+  if (!msg || !Array.isArray(msg.content)) return message;
+  if (msg.role !== "user") return message;
+  if (bareText !== undefined) {
+    return { ...msg, content: [{ type: "text", text: bareText }, ...msg.content.filter((b) => b?.type !== "text")] };
+  }
+  return {
+    ...msg,
+    content: msg.content.map((block) => {
+      if (block?.type !== "text" || typeof block.text !== "string") return block;
+      const start = block.text.startsWith("<environment>\n") ? 0 : block.text.indexOf("\n\n<environment>\n");
+      if (start < 0 || !block.text.endsWith("</environment>")) return block;
+      return { ...block, text: block.text.slice(0, start) };
+    }),
+  };
+}
+
 export function foldTape(rows: readonly TapeRecord[]): unknown[] {
   const f: Foldable = { out: [], boundaries: [] };
   for (const row of rows) {
@@ -224,10 +242,10 @@ export function foldTape(rows: readonly TapeRecord[]): unknown[] {
     const ev = contextEvent(row);
     if (ev) {
       if (ev.event === "legacy_import") {
-        f.out = healLegacyAssistantVoice(ev.messages ?? []);
+        f.out = healLegacyAssistantVoice(ev.messages ?? []).map((message) => replayMessage(message));
         f.boundaries = row.coversEntrySeq !== undefined ? [{ pos: f.out.length, entrySeq: row.coversEntrySeq }] : [];
       } else if (ev.event === "legacy_patch") {
-        f.out.push(...healLegacyAssistantVoice(ev.messages ?? []));
+        f.out.push(...healLegacyAssistantVoice(ev.messages ?? []).map((message) => replayMessage(message)));
         if (row.coversEntrySeq !== undefined) f.boundaries.push({ pos: f.out.length, entrySeq: row.coversEntrySeq });
       } else if (ev.event === "compaction") {
         const cut =
@@ -253,9 +271,32 @@ export function foldTape(rows: readonly TapeRecord[]): unknown[] {
       }
       continue;
     }
-    if (row.kind === "message" && row.payload != null) f.out.push(row.payload);
+    if (row.kind === "message" && row.payload != null)
+      f.out.push(row.meta?.overheard ? row.payload : replayMessage(row.payload, row.meta?.bareText));
   }
-  return f.out;
+  const memoryWrites = new Set<string>();
+  for (const message of f.out) {
+    const msg = message as {
+      role?: string;
+      content?: Array<{ type?: string; name?: string; id?: string; arguments?: { action?: string } }>;
+    };
+    if (msg?.role !== "assistant" || !Array.isArray(msg.content)) continue;
+    for (const block of msg.content) {
+      if (
+        block.type === "toolCall" &&
+        block.name === "memory" &&
+        block.id &&
+        (block.arguments?.action === "remember" || block.arguments?.action === "rewrite")
+      )
+        memoryWrites.add(block.id);
+    }
+  }
+  return f.out.map((message) => {
+    const msg = message as { role?: string; toolName?: string; toolCallId?: string };
+    if (msg?.role !== "toolResult" || msg.toolName !== "memory" || memoryWrites.has(msg.toolCallId ?? ""))
+      return message;
+    return { ...msg, content: [{ type: "text", text: EXPIRED_MEMORY_RESULT }], details: {} };
+  });
 }
 
 const LEGACY_CONTINUATION_LINE = "(continuing after the tool result above)";

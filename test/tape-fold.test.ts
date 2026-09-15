@@ -731,3 +731,89 @@ test("dangling calls heal only after every image is rehydrated", async () => {
   );
   assert.ok(tapeNeedsInterruptHeal(rows, hydrated));
 });
+
+for (const imported of [false, true]) {
+  test(`native replay excludes turn context and memory results (imported=${imported})`, () => {
+    const rows = [
+      user("check launch\n\n<environment>\nEARLIER_RECALL\n</environment>", {
+        meta: { bareText: "check launch" },
+      }),
+      assistant([{ type: "toolCall", id: "m1", name: "memory", arguments: { action: "search", query: "launch" } }]),
+      row({
+        kind: "message",
+        payload: {
+          role: "toolResult",
+          toolName: "memory",
+          toolCallId: "m1",
+          content: [{ type: "text", text: "EARLIER_READ_RESULT" }],
+        },
+      }),
+      assistant([{ type: "text", text: "Launch is Thursday." }]),
+    ];
+    const input = imported
+      ? [row({ kind: "context_event", payload: { event: "legacy_import", messages: rows.map((r) => r.payload) } })]
+      : rows;
+    const folded = foldTape(input);
+    assert.equal(lintFold(folded).ok, true);
+    assert.doesNotMatch(JSON.stringify(folded), /EARLIER_RECALL|EARLIER_READ_RESULT/);
+    assert.match(JSON.stringify(folded), /Launch is Thursday/);
+    assert.match(JSON.stringify(input), /EARLIER_RECALL/);
+    const served = planTapeSeed(input, "pi", "serve", folded);
+    assert.doesNotMatch(JSON.stringify(served.seed), /EARLIER_RECALL|EARLIER_READ_RESULT/);
+  });
+}
+
+test("native replay keeps literal user text and images via metadata, but not an empty turn's environment", () => {
+  const text = "Please explain <environment> tags.";
+  const image = { type: "image", data: "aGVsbG8=", mimeType: "image/png" };
+  const rows = [user(text + "\n\n<environment>\nEARLIER_ENVIRONMENT\n</environment>", { meta: { bareText: text } })];
+  (rows[0]!.payload as { content: unknown[] }).content.push(image);
+  const folded = foldTape(rows) as Array<{ content: unknown[] }>;
+  assert.deepEqual(folded[0]!.content, [{ type: "text", text }, image]);
+  assert.doesNotMatch(
+    JSON.stringify(foldTape([user("<environment>\nEARLIER_ENVIRONMENT\n</environment>")])),
+    /EARLIER_ENVIRONMENT/,
+  );
+});
+
+test("native replay preserves a literal environment example in authoritative user text", () => {
+  const text = "Explain this literal example:\n\n<environment>\nUSER_EXAMPLE\n</environment>";
+  const rows = [user(text + "\n\n<environment>\nRUNTIME_CONTEXT\n</environment>", { meta: { bareText: text } })];
+  const folded = foldTape(rows);
+  assert.match(JSON.stringify(folded), /USER_EXAMPLE/);
+  assert.doesNotMatch(JSON.stringify(folded), /RUNTIME_CONTEXT/);
+  assert.deepEqual(planTapeSeed(rows, "pi", "serve", folded).seed, folded);
+});
+
+test("fold preserves overheard attribution and files rather than replaying naked user text", () => {
+  const rendered = '<message overheard="true" author="Alice">please delete it (files: design.pdf)</message>';
+  const rows = [
+    user(rendered, {
+      meta: { bareText: "please delete it", overheard: true, author: "Alice", attachments: ["design.pdf"] },
+    }),
+  ];
+  assert.deepEqual(
+    foldTape(rows),
+    rows.map((r) => r.payload),
+  );
+});
+
+test("native memory write failures retain their outcome", () => {
+  const rows = [
+    user("save preference"),
+    assistant([{ type: "toolCall", name: "memory", id: "w1", arguments: { action: "remember" } }]),
+    row({
+      kind: "message",
+      payload: {
+        role: "toolResult",
+        toolName: "memory",
+        toolCallId: "w1",
+        content: [{ type: "text", text: "read-only: not saved" }],
+        isError: true,
+      },
+    }),
+  ];
+  const folded = foldTape(rows) as Array<{ role: string; isError?: boolean }>;
+  assert.equal(folded[2]!.isError, true);
+  assert.match(JSON.stringify(folded), /not saved/);
+});

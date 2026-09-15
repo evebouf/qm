@@ -29,6 +29,8 @@ import {
   deterministicCompactSummary,
   estimateHistoryTokens,
   forModelContext,
+  forSearchView,
+  compactTranscript,
   overBudgetFraction,
   planCompaction,
 } from "../src/harness/context-compaction.ts";
@@ -1080,7 +1082,7 @@ test("a summary that landed while the pass was summarizing makes it drop its own
   assert.equal(resetCalls.length, 0, "the dropped pass never reached its write");
 });
 
-test("the token estimate counts the environment note persisted on a user entry", () => {
+test("the token estimate excludes turn-local environment notes", () => {
   const environment = `<environment>\n${"## What you remember\nlikes terse replies. ".repeat(40)}\n</environment>`;
   const bare = {
     sessionId: "s",
@@ -1093,7 +1095,7 @@ test("the token estimate counts the environment note persisted on a user entry",
   } as SessionEntry;
   const withEnv = { ...bare, seq: 2, payload: { text: "hi", environment } } as SessionEntry;
   const delta = estimateHistoryTokens([withEnv]) - estimateHistoryTokens([bare]);
-  assert.ok(delta >= countTokens(environment) * 0.9, `environment tokens must be counted (delta ${delta})`);
+  assert.equal(delta, 0);
 });
 
 test("runtime handoff continues once with saved results under the original run and remaining deadline", async () => {
@@ -1206,3 +1208,36 @@ test("a retry restores a committed runtime decision after reset crashes, without
   await orch.handleTurn({ ...input, attempt: 2 });
   assert.equal(calls, 2);
 });
+
+for (const text of ["check launch", ""]) {
+  test(`model, search and compaction views omit turn context (text=${JSON.stringify(text)})`, () => {
+    const base = { sessionId: "s", parentSeq: null, scopeLabel: scopeId("channel", "C1"), createdAt: 1 };
+    const entries: SessionEntry[] = [
+      {
+        ...base,
+        seq: 1,
+        type: "user",
+        payload: { text, environment: "EARLIER_ENVIRONMENT", attachments: [{ name: "launch.txt" }] },
+      },
+      { ...base, seq: 2, type: "tool_call", payload: { tool: "memory", action: "read", callId: "m1" } },
+      {
+        ...base,
+        seq: 3,
+        type: "tool_result",
+        payload: { tool: "memory", action: "read", callId: "m1", result: "EARLIER_READ_RESULT" },
+      },
+      { ...base, seq: 4, type: "assistant", payload: { text: "Launch is Thursday." } },
+    ];
+    for (const output of [
+      JSON.stringify(forModelContext(entries)),
+      JSON.stringify(forSearchView(entries)),
+      compactTranscript(entries),
+      deterministicCompactSummary(entries),
+    ]) {
+      assert.doesNotMatch(output, /EARLIER_ENVIRONMENT|EARLIER_READ_RESULT/);
+      assert.match(output, /Launch is Thursday/);
+    }
+    assert.match(JSON.stringify(forModelContext(entries)), /launch.txt/);
+    assert.match(JSON.stringify(entries), /EARLIER_ENVIRONMENT/);
+  });
+}

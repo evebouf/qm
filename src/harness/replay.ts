@@ -1,7 +1,7 @@
 import type { ConversationTurn, OverheardMessage, ScopeId, SessionEntry } from "../types.ts";
 import { deliveryNote } from "../core/attachments.ts";
 import { messageRevision, renderMessageRevision } from "../core/message-revisions.ts";
-import { CONTEXT_SUMMARY_HEADER, forModelContext, INTERRUPTED_TOOL_RESULT } from "./context-compaction.ts";
+import { CONTEXT_SUMMARY_HEADER, forModelContext, INTERRUPTED_TOOL_RESULT, replayEntry } from "./context-compaction.ts";
 import { contextSummaryPayload } from "../sessions/session-store.ts";
 import { isoFromTs, messageTag } from "../util/message-tag.ts";
 import { TAPE_IMPORT_MAX_ENTRIES } from "../sessions/session-store.ts";
@@ -131,6 +131,7 @@ const hasToolCall = (m: PiReplayMessage): boolean =>
   m.role === "assistant" && m.content.some((c) => c.type === "toolCall");
 
 export function reconstructMessagesFromHistory(history: readonly SessionEntry[]): PiReplayMessage[] {
+  history = history.map(replayEntry);
   const resultByCallId = new Map<string, SessionEntry>();
   for (const e of history) {
     if (e.type !== "tool_result") continue;
@@ -162,10 +163,7 @@ export function reconstructMessagesFromHistory(history: readonly SessionEntry[])
       if (ov) {
         if (ov.text.trim() || ov.files?.length) raw.push(userMsg(renderOverheard(ov), e.createdAt));
       } else {
-        const environment = (e.payload as { environment?: unknown } | null)?.environment;
-        const t = [entryText(e), typeof environment === "string" ? environment.trim() : ""]
-          .filter(Boolean)
-          .join("\n\n");
+        const t = entryText(e);
         if (t) raw.push(userMsg(t, e.createdAt));
       }
     } else if (e.type === "assistant") {

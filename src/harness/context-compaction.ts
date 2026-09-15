@@ -43,14 +43,44 @@ export function compactedScopeLabel(
   return labels.includes(sessionScopeId) ? sessionScopeId : orgScopeId;
 }
 
+export const EXPIRED_MEMORY_RESULT =
+  "[earlier memory result omitted; read or search memory again for currently authorized context]";
+
+export function replayEntry(entry: SessionEntry): SessionEntry {
+  const payload = entry.payload as Record<string, unknown> | null;
+  if (entry.type === "user" && payload && "environment" in payload) {
+    const { environment: _environment, ...rest } = payload;
+    return { ...entry, payload: rest };
+  }
+  if (
+    entry.type === "tool_result" &&
+    payload?.tool === "memory" &&
+    (payload.action === "read" || payload.action === "search")
+  ) {
+    return {
+      ...entry,
+      payload: {
+        tool: "memory",
+        action: payload.action,
+        callId: payload.callId,
+        result: EXPIRED_MEMORY_RESULT,
+        isError: payload.isError === true,
+      },
+    };
+  }
+  return entry;
+}
+
 function modelReplayable(entries: SessionEntry[]): SessionEntry[] {
-  return entries.filter(
-    (e) =>
-      e.type !== "thinking" &&
-      e.type !== "text" &&
-      e.type !== "soul" &&
-      (e.payload as { kind?: unknown } | null)?.kind !== "turn_failure",
-  );
+  return entries
+    .map(replayEntry)
+    .filter(
+      (e) =>
+        e.type !== "thinking" &&
+        e.type !== "text" &&
+        e.type !== "soul" &&
+        (e.payload as { kind?: unknown } | null)?.kind !== "turn_failure",
+    );
 }
 
 export function forModelContext(
@@ -78,11 +108,8 @@ const entryTokenCache = new Map<string, number>();
 const ENTRY_TOKEN_CACHE_MAX = 50_000;
 
 export function estimateEntryTokens(entry: SessionEntry): number {
-  const payload = entry.payload as { text?: string; environment?: string } | null;
-  const text =
-    typeof payload?.text === "string"
-      ? [payload.text, payload.environment].filter((s) => typeof s === "string" && s).join("\n\n")
-      : JSON.stringify(entry.payload ?? {});
+  const payload = replayEntry(entry).payload as { text?: string } | null;
+  const text = typeof payload?.text === "string" ? payload.text : JSON.stringify(payload ?? {});
   const key = `${entry.sessionId}:${entry.seq}:${text.length}`;
   const hit = entryTokenCache.get(key);
   if (hit !== undefined) return hit;
@@ -117,6 +144,7 @@ function entryStamp(createdAt: number): string {
 }
 
 export function compactTranscript(history: SessionEntry[]): string {
+  history = history.map(replayEntry);
   const resultByCallId = new Map<string, true>();
   for (const entry of history) {
     if (entry.type !== "tool_result") continue;

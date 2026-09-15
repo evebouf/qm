@@ -506,13 +506,46 @@ test("a legacy call with a numeric files count replays without it (schema wants 
   assert.ok(!("bytes" in args));
 });
 
-test("reconstructMessagesFromHistory replays the environment note the user message was sent with", () => {
+test("reconstructMessagesFromHistory excludes turn-local environment notes", () => {
   const history = [
     ent("user", { text: "what's on today?", environment: "<environment>\nIt is Monday 9am\n</environment>" }, 1),
     ent("assistant", { text: "Nothing yet." }, 2),
   ];
   const [user] = reconstructMessagesFromHistory(history);
-  assert.deepEqual(user!.content, [
-    { type: "text", text: "what's on today?\n\n<environment>\nIt is Monday 9am\n</environment>" },
+  assert.deepEqual(user!.content, [{ type: "text", text: "what's on today?" }]);
+});
+
+for (const action of ["read", "search"]) {
+  test(`replay omits previous memory ${action} results without breaking tool pairing`, () => {
+    const history = [
+      ent("user", { text: "check launch" }, 1),
+      ent("tool_call", { tool: "memory", action, callId: "m1" }, 2),
+      ent(
+        "tool_result",
+        { tool: "memory", action, callId: "m1", result: "EARLIER_RECALL", query: "EARLIER_RECALL" },
+        3,
+      ),
+      ent("assistant", { text: "Launch is Thursday." }, 4),
+    ];
+    const messages = reconstructMessagesFromHistory(history);
+    assertValidWire(messages);
+    assert.doesNotMatch(JSON.stringify(messages), /EARLIER_RECALL/);
+    assert.match(JSON.stringify(messages), /Launch is Thursday/);
+    assert.match(JSON.stringify(history), /EARLIER_RECALL/);
+  });
+}
+
+test("memory write failures retain their outcome during replay", () => {
+  const messages = reconstructMessagesFromHistory([
+    ent("user", { text: "save preference" }, 1),
+    ent("tool_call", { tool: "memory", action: "remember", callId: "w1" }, 2),
+    ent(
+      "tool_result",
+      { tool: "memory", action: "remember", callId: "w1", result: "read-only: not saved", isError: true },
+      3,
+    ),
   ]);
+  const result = messages.find((message) => message.role === "toolResult");
+  assert.equal(result?.isError, true);
+  assert.match(JSON.stringify(result), /not saved/);
 });
