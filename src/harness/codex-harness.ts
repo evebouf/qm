@@ -1043,7 +1043,17 @@ export function createCodexHarness(opts: CodexHarnessOptions = {}): Harness {
       },
     };
     const startedAt = Date.now();
+    let budgetOperationId: string | undefined;
     const recordRequest = async (): Promise<void> => {
+      const usage = sumUsage(state.usageByThread);
+      if (budgetOperationId && usage && turn.usageMeter) {
+        await turn.usageMeter.settle(budgetOperationId, selectedModel, {
+          input: usage.input,
+          output: usage.output,
+          cacheRead: usage.cacheRead,
+          cacheWrite: usage.cacheWrite,
+        });
+      }
       if (!turn.recordLlmRequest) return;
       const recordAbort = new AbortController();
       let recordTimer: NodeJS.Timeout | undefined;
@@ -1059,7 +1069,7 @@ export function createCodexHarness(opts: CodexHarnessOptions = {}): Harness {
               transport: { modelId: selectedModel },
               ttftMs: state.firstOutputAt ? state.firstOutputAt - startedAt : null,
               durationMs: Date.now() - startedAt,
-              usage: sumUsage(state.usageByThread),
+              usage,
             },
             recordAbort.signal,
           ),
@@ -1130,6 +1140,7 @@ export function createCodexHarness(opts: CodexHarnessOptions = {}): Harness {
     const cleanupErrors: unknown[] = [];
     let turnResult: HarnessTurnResult | undefined;
     try {
+      budgetOperationId = await turn.usageMeter?.reserve(selectedModel, state.fallbackInputTokens);
       const turnStartSignals = [closeAbort.signal, turnStartAbort.signal];
       if (turn.cancel) turnStartSignals.push(turn.cancel);
       const turnStartTimeoutMs = deadline ? Math.max(1, deadline - Date.now()) : CODEX_START_TIMEOUT_MS;
