@@ -167,3 +167,17 @@ test("brotli-capable clients retain gzip fallback for assets from older builds",
   assert.equal(result.headers["content-encoding"], "gzip");
   assert.equal(gunzipSync(result.body).toString("utf8"), assetBody);
 });
+
+test("static assets do not send identity when every available encoding is rejected", async () => {
+  for (const header of ["identity;q=0, br;q=0, gzip;q=0", "*;q=0"]) {
+    const response = await get(`/assets/${assetName}`, { "accept-encoding": header });
+    assert.equal(response.status, 406);
+    assert.equal(response.body.length, 0);
+    assert.equal(response.headers["content-encoding"], undefined);
+    assert.equal(response.headers["cache-control"], "no-store");
+    assert.equal(response.headers["vary"], "accept-encoding");
+  }
+  const unavailable = await get(`/assets/${legacyName}`, { "accept-encoding": "br, gzip;q=0, identity;q=0" });
+  assert.equal(unavailable.status, 406);
+  assert.equal(unavailable.body.length, 0);
+});

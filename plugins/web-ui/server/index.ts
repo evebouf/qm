@@ -821,7 +821,7 @@ async function uploadFileFromRequest(
   return sendBuffered(res, registered.status, { "content-type": "application/json" }, registered.text);
 }
 
-function staticEncoding(req: IncomingMessage, filePath: string): "br" | "gzip" | undefined {
+function staticEncoding(req: IncomingMessage, filePath: string): "br" | "gzip" | null | undefined {
   const header = req.headers["accept-encoding"];
   if (header === undefined) return undefined;
   const weights = new Map<string, number>();
@@ -842,7 +842,8 @@ function staticEncoding(req: IncomingMessage, filePath: string): "br" | "gzip" |
       bestWeight = weight;
     }
   }
-  return best;
+  const identityWeight = weights.get("identity") ?? (weights.get("*") === 0 ? 0 : 1);
+  return best ?? (identityWeight > 0 ? undefined : null);
 }
 
 async function serveStatic(res: ServerResponse, urlPath: string): Promise<void> {
@@ -870,6 +871,10 @@ async function serveStatic(res: ServerResponse, urlPath: string): Promise<void> 
     vary: "accept-encoding",
   });
   const encoding = staticEncoding(res.req, filePath);
+  if (encoding === null) {
+    res.writeHead(406, withSecurityHeaders({ "cache-control": "no-store", vary: "accept-encoding" }));
+    return void res.end();
+  }
   if (encoding) {
     res.writeHead(200, { ...headers, "content-encoding": encoding });
     return void pipeFile(res, `${filePath}.${encoding === "br" ? "br" : "gz"}`);
