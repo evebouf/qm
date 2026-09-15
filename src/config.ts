@@ -783,7 +783,7 @@ export const CONFIG_DEFAULTS = {
   approvalSummaryTimeoutMs: 6_000,
   turnLeaseWaitMs: 5_000,
   securityScreenTimeoutMs: 15_000,
-  workers: availableParallelism(),
+  workers: Math.min(16, availableParallelism()),
   leaseTtlMs: 120_000,
   heartbeatIntervalMs: 10_000,
   reaperIntervalMs: 15_000,

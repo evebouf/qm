@@ -291,7 +291,7 @@ test("production refuses missing, placeholder, or weak signing keys", () => {
 
 test("defaults come from CONFIG_DEFAULTS, set exactly once", () => {
   const def = loadConfig({});
-  assert.equal(def.workers, availableParallelism());
+  assert.equal(def.workers, Math.min(16, availableParallelism()));
   assert.equal(def.workers, CONFIG_DEFAULTS.workers);
   assert.equal(loadConfig({ WORKERS: "7" }).workers, 7);
   assert.equal(def.rateLimitPerWindow, CONFIG_DEFAULTS.rateLimitPerWindow);
