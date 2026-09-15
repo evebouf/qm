@@ -6,7 +6,7 @@ import { isObj } from "./shared.ts";
 import { type ApiCtx, type Route } from "./route.ts";
 import { loadAdministrable, loopDeps, actingPrincipal, type LoopServiceDeps } from "./loops.ts";
 import { parseScopeId } from "../../types.ts";
-import { isLedgerState, ledgerItemView, ledgerState, sortLedgerItems } from "../../loops/ledger-view.ts";
+import { isResolved, isLedgerState, ledgerItemView, ledgerState, sortLedgerItems } from "../../loops/ledger-view.ts";
 import type { IngestEntryInput } from "../../loops/item-ledger.ts";
 import { adapterForItem, sourceAdapter } from "../../loops/sources/index.ts";
 import {
@@ -100,6 +100,12 @@ async function listItems(ctx: ApiCtx): Promise<void> {
   if (wanted !== null && !isLedgerState(wanted)) {
     return sendJson(ctx.res, 400, { error: "bad_request", message: "unknown state filter" });
   }
+  if (loop.surface === "inbox" && loop.owner === loaded.acting.actorId) {
+    const openMail = (await deps.items.byLoop(loop.id)).filter(
+      (item) => !isResolved(item) && (item.source ?? item.sourcePayload?.source) === "gmail",
+    );
+    await ctx.deps.inboxSourceRefresh?.(loop.owner, openMail);
+  }
   const all = sortLedgerItems(await deps.items.byLoop(loop.id));
   const items = wanted === null ? all : all.filter((item) => ledgerState(item) === wanted);
   const counts: Record<string, number> = {};
@@ -129,10 +135,20 @@ async function ingestItems(ctx: ApiCtx): Promise<void> {
     ? ((await ctx.deps.sessions?.getByThread(ctx.capability.threadRef))?.id ?? undefined)
     : undefined;
   const entries: IngestEntryInput[] = [];
+  const existingItems = await deps.items.byLoop(loop.id);
   for (const [at, raw] of body.items.entries()) {
     const parsed = parseIngestEntry(loop, raw);
     if ("error" in parsed) {
       return sendJson(ctx.res, 400, { error: "bad_request", message: `items[${at}]: ${parsed.error}` });
+    }
+    if (parsed.source === "slack") {
+      const adapter = sourceAdapter("slack")!;
+      const existing = existingItems.find(
+        (item) =>
+          (item.source ?? item.sourcePayload?.source) === "slack" && adapter.matchesEvent(item, parsed.dedupeKey),
+      );
+      // Retain the ID, human edits and resolution watermark of legacy channel-keyed cards.
+      if (existing) parsed.dedupeKey = existing.sourceKey;
     }
     entries.push(sessionId && parsed.proposal ? { ...parsed, proposal: { ...parsed.proposal, sessionId } } : parsed);
   }
@@ -216,7 +232,13 @@ async function serveItemImage(ctx: ApiCtx): Promise<void> {
 async function getItem(ctx: ApiCtx): Promise<void> {
   const loaded = await loadItem(ctx);
   if (!loaded) return;
-  sendJson(ctx.res, 200, { item: ledgerItemView(loaded.item) });
+  if (
+    ctx.url.searchParams.get("refreshSource") === "1" &&
+    loaded.loop.surface === "inbox" &&
+    loaded.loop.owner === loaded.actorId
+  )
+    await ctx.deps.inboxSourceRefresh?.(loaded.loop.owner, [loaded.item]);
+  sendJson(ctx.res, 200, { item: ledgerItemView((await loaded.deps.items.get(loaded.item.id)) ?? loaded.item) });
 }
 
 function sameProposalData(item: LoopItem, data: LoopSourcePayload): boolean {
@@ -281,6 +303,7 @@ async function actOnItem(ctx: ApiCtx): Promise<void> {
     const next = await deps.items.recordAction(item.id, {
       kind,
       outcome: "dismissed",
+      ...(typeof args.sourceAt === "number" ? { sourceAt: args.sourceAt } : {}),
       ...(text ? { result: text } : {}),
     });
     if (!next) {

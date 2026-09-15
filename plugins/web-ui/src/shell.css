@@ -10569,3 +10569,17 @@ h3.ambient-field-label {
   white-space: nowrap;
   color: var(--muted-foreground);
 }
+
+.inbox-thread-reply {
+  margin-left: 28px;
+  border-left: 2px solid var(--border);
+  padding-left: 12px;
+}
+.inbox-source-notice,
+.inbox-nearby-context {
+  color: var(--muted-foreground);
+}
+.inbox-source-notice {
+  font-size: 12px;
+  padding: 8px 0;
+}

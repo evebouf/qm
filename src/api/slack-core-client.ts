@@ -133,6 +133,7 @@ export interface SlackCoreClient {
     threadTs?: string;
     text?: string;
     senderEmail?: string;
+    isDirectMessage?: boolean;
   }): Promise<void>;
 }
 
@@ -506,7 +507,7 @@ export function createSlackCoreClient(deps: SlackCoreClientDeps): SlackCoreClien
       if (!Number.isFinite(at)) return;
       await deps.inboxEvent?.({
         source: "slack",
-        conversationRef: slackConversationRef(msg.channel, msg.ts, msg.threadTs),
+        conversationRef: slackConversationRef(msg.channel, msg.ts, msg.threadTs, msg.isDirectMessage),
         at,
         ...(msg.text ? { text: msg.text } : {}),
         ...(msg.senderEmail ? { senderEmail: msg.senderEmail } : {}),

@@ -54,13 +54,14 @@ interface RecordActionInput {
   result?: string;
   actorId?: string;
   outcome: "actioned" | "dismissed";
+  sourceAt?: number;
 }
 
 export interface LoopItemLedger {
   enqueue(input: EnqueueItemInput): Promise<EnqueueResult>;
   ingest(entries: IngestEntryInput[]): Promise<IngestOutcome>;
   setProposal(id: string, proposal: Omit<LoopProposal, "at">, opts?: { expectedAt?: number }): Promise<LoopItem | null>;
-  annotate(id: string, patch: LoopSourcePayload): Promise<LoopItem | null>;
+  annotate(id: string, patch: LoopSourcePayload, expectedSourceAt?: number): Promise<LoopItem | null>;
   appendThread(id: string, messages: Array<Omit<LoopThreadMessage, "id" | "at">>): Promise<LoopItem | null>;
   recordAction(id: string, input: RecordActionInput): Promise<LoopItem | null>;
   reopen(id: string): Promise<LoopItem | null>;
@@ -266,11 +267,15 @@ export function createLoopItemLedger(
       if (applied) emit(after, "proposal");
       return applied ? after : null;
     },
-    async annotate(id, patch) {
+    async annotate(id, patch, expectedSourceAt) {
       let applied = false;
       const after = await update(id, (item) => {
         applied = true;
         const now = Date.now();
+        if (expectedSourceAt !== undefined && item.sourceAt !== expectedSourceAt) {
+          applied = false;
+          return item;
+        }
         return { ...item, sourcePayload: { ...item.sourcePayload, ...patch }, updatedAt: now };
       });
       if (applied) emit(after, "annotate");
@@ -297,12 +302,18 @@ export function createLoopItemLedger(
       let applied = false;
       const after = await update(id, (item) => {
         if (item.status === "shipped") return item;
+        if (
+          input.sourceAt !== undefined &&
+          (!Number.isFinite(input.sourceAt) || input.sourceAt <= (item.sourceAt ?? 0) || isResolved(item))
+        )
+          return item;
         applied = true;
         const now = Date.now();
         return {
           ...item,
           status: input.outcome === "actioned" ? "shipped" : "skipped",
           actionKind: input.kind,
+          ...(input.sourceAt !== undefined ? { sourceAt: input.sourceAt } : {}),
           actedAt: now,
           claimedAt: undefined,
           claimToken: undefined,

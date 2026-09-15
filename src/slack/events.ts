@@ -56,7 +56,14 @@ export function registerSlackEvents(
     ) => void;
     inboxMessage?: (
       client: unknown,
-      msg: { channel: string; ts: string; threadTs?: string; text?: string; senderSlackId?: string },
+      msg: {
+        channel: string;
+        ts: string;
+        threadTs?: string;
+        text?: string;
+        senderSlackId?: string;
+        isDirectMessage?: boolean;
+      },
     ) => void;
   },
 ): void {
@@ -171,6 +178,7 @@ export function registerSlackEvents(
       deps.inboxMessage?.(client, {
         channel: m.channel,
         ts: m.ts,
+        ...(m.channel_type ? { isDirectMessage: m.channel_type === "im" || m.channel_type === "mpim" } : {}),
         ...(m.thread_ts ? { threadTs: m.thread_ts } : {}),
         ...(typeof m.text === "string" && m.text ? { text: m.text } : {}),
         ...(m.user ? { senderSlackId: m.user } : {}),
