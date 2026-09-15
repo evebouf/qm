@@ -420,7 +420,7 @@ export function createModalSandbox(workspace: WorkspaceStore, opts: ModalSandbox
     processSessions: true,
     egressEnforcement: "none",
     spec: {
-      os: "Ubuntu — Modal sandbox (24h max lifetime; home checkpoints have limited retention; publish durable work to git or Files)",
+      os: "Debian — Modal sandbox (24h max lifetime; home checkpoints have limited retention; publish durable work to git or Files)",
       runtimes: ["Python 3"],
       get tools() {
         return visibleTools(["git", "curl", "jq", "tar", "python3", ...(opts.extraTools ?? [])]);

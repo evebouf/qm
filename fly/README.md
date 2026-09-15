@@ -17,8 +17,11 @@ Where the image is used:
   published base via `qm sandbox build` (a local validation build).
 
 Runtime sandbox backends (sprites, smolmachines, e2b, modal) do **not** boot this
-image: they boot their platform's stock image, and the deployment layer's tool
-descriptors and skills arrive through the deployment-layer sync.
+image. Sprites and smolmachines boot their platform's stock image; e2b boots the
+template built from `deploy/e2b/e2b.Dockerfile`; modal boots `MODAL_IMAGE` or, when
+unset, a default assembled at runtime from the same digest-pinned `node:24-slim` as
+this image with the sandbox toolset apt-installed on top. The deployment layer's
+tool descriptors and skills arrive through the deployment-layer sync.
 
 Deployment-specific tools are NOT baked here — a deployment stacks them via its
 sandbox layer (`qm sandbox build` over `<deploy dir>/sandbox/`). `fly/tools/x-api` is

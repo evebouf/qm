@@ -827,6 +827,10 @@ export function buildApp(
       onError: sandboxOnError,
     });
   };
+  const MODAL_DEFAULT_IMAGE =
+    "node:24-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d";
+  const MODAL_DEFAULT_IMAGE_SETUP =
+    "RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git jq tar xz-utils unzip python3 python3-venv openssh-client && rm -rf /var/lib/apt/lists/*";
   const buildModal = (): Sandbox => {
     const modal = config.modalSandbox;
     if (!modal.tokenId || !modal.tokenSecret)
@@ -836,15 +840,8 @@ export function buildApp(
         tokenId: modal.tokenId,
         tokenSecret: modal.tokenSecret,
         appName: modal.appName ?? "qm",
-        image: modal.image ?? "ubuntu:24.04",
-        ...(modal.image
-          ? {}
-          : {
-              imageSetupCommands: [
-                "RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl git jq tar xz-utils unzip python3 python3-venv openssh-client && rm -rf /var/lib/apt/lists/*",
-                "RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && apt-get install -y --no-install-recommends nodejs && rm -rf /var/lib/apt/lists/* && node --version",
-              ],
-            }),
+        image: modal.image ?? MODAL_DEFAULT_IMAGE,
+        ...(modal.image ? {} : { imageSetupCommands: [MODAL_DEFAULT_IMAGE_SETUP] }),
         ...(modal.environment ? { environment: modal.environment } : {}),
         ...(modal.cpus !== undefined ? { cpus: modal.cpus } : {}),
         ...(modal.memoryMb !== undefined ? { memoryMb: modal.memoryMb } : {}),
