@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createMemorySurfaceCache, createPostgresSurfaceCache } from "../src/surface-cache/surface-cache.ts";
-import { slackMessageToIngestEvent } from "../src/slack/mirror.ts";
+import { createMirror, slackMessageToIngestEvent } from "../src/slack/mirror.ts";
 import { toEvent } from "../src/api/routes/surface-cache.ts";
 import { createSlackHistoryReader } from "../src/slack/history.ts";
+import { buildContextWindow } from "../src/slack/conversation.ts";
 import { createConversationSerializer } from "../src/slack/conversation-view.ts";
 import type { SlackCoreClient } from "../src/api/slack-core-client.ts";
 import type { BotIdentity, Directory } from "../src/slack/directory.ts";
@@ -149,4 +150,51 @@ test("live and shadow do not repair their own comparison source", async () => {
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(writes, 0);
   }
+});
+
+test("event mirroring preserves mention IDs for current-context rendering", async () => {
+  const cache = createMemorySurfaceCache();
+  const core = {
+    ingestSurfaceEvents: async (events) => {
+      await cache.ingest(events);
+    },
+    readSurfaceMessages: cache.readMessages,
+  } as SlackCoreClient;
+  const mentionDirectory = {
+    classifyUserCached: async () => ({ actor: { displayName: "Old name" } }),
+  } as unknown as Directory;
+  const mirror = createMirror({
+    core,
+    ids,
+    directory: mentionDirectory,
+    externalParticipantsEnabled: async () => true,
+  });
+  const raw = {
+    channel: "C",
+    channel_type: "channel" as const,
+    ts: "1000",
+    text: "Hi <@U1> and <@U2> &amp; welcome",
+    user: "U1",
+  };
+  await mirror.mirrorMessageEvent(raw, {});
+  const stored = (await cache.readMessages("C"))[0]!;
+  assert.equal(stored.text, "Hi <@U1> and <@U2> & welcome");
+  assert.deepEqual(stored.mentions, { U1: "Old name", U2: "Old name" });
+  const shaped = [];
+  for (const source of ["live", "mirror"] as const) {
+    const readHistory = createSlackHistoryReader({ core, ids, source });
+    const serializer = createConversationSerializer({
+      ids,
+      directory: mentionDirectory,
+      externalParticipantsEnabled: async () => true,
+      readHistory,
+    });
+    const page = await readHistory({ conversations: { history: async () => ({ messages: [raw] }) } }, "C");
+    shaped.push(await serializer.shapeRecentMessages({}, page.raw, "", new Map([["U1", "New name"]])));
+  }
+  assert.deepEqual(shaped[1], shaped[0]);
+  assert.equal(shaped[1]![0]!.text, "Hi <@U1> and <@U2> & welcome");
+  assert.equal(shaped[1]![0]!.name, "New name");
+  const context = buildContextWindow(shaped[1]!, { count: 20, nameById: new Map([["U1", "New name"]]) });
+  assert.equal(context.messages[0]!.text, "Hi @New name and <@U2> & welcome");
 });

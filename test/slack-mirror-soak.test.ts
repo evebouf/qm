@@ -204,7 +204,7 @@ test("shadow distinguishes stored messages with wrong parents from ingestion los
   assert.equal(result.matchingMessages, 1);
 });
 
-test("shadow normalizes mentions without erasing literal entity or attachment differences", async (t) => {
+test("shadow compares canonical mention IDs without erasing literal entity or attachment differences", async (t) => {
   const { createMemorySurfaceCache } = await import("../src/surface-cache/surface-cache.ts");
   const cache = createMemorySurfaceCache();
   await cache.ingest([
@@ -382,4 +382,21 @@ test("shadow freezes live messages and attachments before callers modify their c
   assert.equal(comparison.textMismatches, 0);
   assert.equal(comparison.fileMismatches, 0);
   assert.equal(comparison.liveMessagesMissingFromStorage, 0);
+});
+
+test("shadow reports legacy rewritten mentions as a difference", async (t) => {
+  const { createMemorySurfaceCache } = await import("../src/surface-cache/surface-cache.ts");
+  const cache = createMemorySurfaceCache();
+  await cache.ingest([{ container: "C", ts: "1", text: "Hi @Alice", mentions: { U1: "Alice" } }]);
+  const logs: string[] = [];
+  t.mock.method(console, "info", (line: string) => logs.push(line));
+  const read = createSlackHistoryReader({
+    ids,
+    source: "shadow",
+    core: { readSurfaceMessages: cache.readMessages } as unknown as SlackCoreClient,
+  });
+  await read({ conversations: { history: async () => ({ messages: [{ ts: "1", text: "Hi <@U1>" }] }) } }, "C");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(JSON.parse(logs[0]!).textMismatches, 1);
+  assert.equal(JSON.parse(logs[0]!).matchingMessages, 0);
 });

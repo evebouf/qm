@@ -1,7 +1,7 @@
 import { slackMessageToIngestEvent } from "./mirror.ts";
 import { messageWithForwardedContent } from "./forwards.ts";
 import type { SlackContextSource } from "./config.ts";
-import { decodeSlackEntities, resolveMentionsInText } from "./lib.ts";
+import { decodeSlackEntities } from "./lib.ts";
 import { slackHistoryRateLimitMessage } from "./history-rate-limit.ts";
 import type { SlackCoreClient } from "../api/slack-core-client.ts";
 import type { CachedMessage } from "../surface-cache/types.ts";
@@ -136,8 +136,7 @@ export function createSlackHistoryReader(deps: {
         if (!stored || stored.deleted) continue;
         storedMessages++;
         const content = messageWithForwardedContent(message);
-        const normalize = (text: string) => resolveMentionsInText(text, (id) => stored.mentions?.[id]);
-        const textMatches = normalize(stored.text) === normalize(decodeSlackEntities(content.text));
+        const textMatches = stored.text === decodeSlackEntities(content.text);
         const parentMatches =
           stored.sub === (message.thread_ts && message.thread_ts !== message.ts ? message.thread_ts : undefined);
         const files = (values: Array<{ id?: string; name?: string; mimetype?: string }>) =>
