@@ -16,7 +16,6 @@ import {
 import { findRoute } from "../../chassis/src/router.ts";
 import {
   json,
-  gzipAccepted,
   readBody as readBodyCapped,
   cookie,
   PayloadTooLargeError,
@@ -822,6 +821,30 @@ async function uploadFileFromRequest(
   return sendBuffered(res, registered.status, { "content-type": "application/json" }, registered.text);
 }
 
+function staticEncoding(req: IncomingMessage, filePath: string): "br" | "gzip" | undefined {
+  const header = req.headers["accept-encoding"];
+  if (header === undefined) return undefined;
+  const weights = new Map<string, number>();
+  for (const part of (Array.isArray(header) ? header.join(",") : header).split(",")) {
+    const [name, ...params] = part.split(";");
+    const token = (name ?? "").trim().toLowerCase();
+    const q = params.map((value) => value.trim().toLowerCase()).find((value) => value.startsWith("q="));
+    const weight = q === undefined ? 1 : Number(q.slice(2));
+    weights.set(token, Number.isFinite(weight) && weight >= 0 && weight <= 1 ? weight : 0);
+  }
+  let best: "br" | "gzip" | undefined;
+  let bestWeight = weights.get("identity") ?? 0;
+  for (const encoding of ["br", "gzip"] as const) {
+    const weight = weights.get(encoding) ?? weights.get("*") ?? 0;
+    const suffix = encoding === "br" ? ".br" : ".gz";
+    if (weight > bestWeight && existsSync(filePath + suffix)) {
+      best = encoding;
+      bestWeight = weight;
+    }
+  }
+  return best;
+}
+
 async function serveStatic(res: ServerResponse, urlPath: string): Promise<void> {
   const rel = normalize(decodeURIComponent(urlPath)).replace(/^(\.\.[/\\])+/, "");
   let filePath = join(DIST, rel);
@@ -846,10 +869,10 @@ async function serveStatic(res: ServerResponse, urlPath: string): Promise<void> 
     "cache-control": immutable ? "public, max-age=31536000, immutable" : "no-cache",
     vary: "accept-encoding",
   });
-  const packed = `${filePath}.gz`;
-  if (gzipAccepted(res.req) && existsSync(packed)) {
-    res.writeHead(200, { ...headers, "content-encoding": "gzip" });
-    return void pipeFile(res, packed);
+  const encoding = staticEncoding(res.req, filePath);
+  if (encoding) {
+    res.writeHead(200, { ...headers, "content-encoding": encoding });
+    return void pipeFile(res, `${filePath}.${encoding === "br" ? "br" : "gz"}`);
   }
   res.writeHead(200, headers);
   pipeFile(res, filePath);
