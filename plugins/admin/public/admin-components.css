@@ -2006,3 +2006,69 @@ dialog.credential-dialog {
   outline: 2px solid var(--cta);
   outline-offset: 3px;
 }
+
+:where(html[data-admin-variant="1"]) #app-view #main {
+  --table-body-size: 13px;
+  --table-meta-size: 12px;
+  --table-line-height: 1.4;
+}
+:where(html[data-admin-variant="1"]) #app-view #main table :is(th, td) {
+  padding: 7px 12px;
+  line-height: var(--table-line-height);
+  vertical-align: middle;
+}
+:where(html[data-admin-variant="1"]) #app-view #main table th {
+  font-size: var(--table-meta-size);
+  font-weight: 400;
+  color: var(--muted);
+  background: transparent;
+}
+:where(html[data-admin-variant="1"]) #app-view #main table td {
+  font-size: var(--table-body-size);
+  font-weight: 400;
+  border-bottom: 1px solid var(--border);
+}
+:where(html[data-admin-variant="1"]) #app-view #main table :is(th, td):first-child {
+  padding-left: 0;
+}
+:where(html[data-admin-variant="1"]) #app-view #main table :is(th, td):last-child {
+  padding-right: 0;
+}
+:where(html[data-admin-variant="1"])
+  #app-view
+  #main
+  :is(table .primaryline, table .pack-name strong, table .mono, .dense-name, .credential-title strong) {
+  font-size: var(--table-body-size);
+  font-weight: 400;
+  line-height: var(--table-line-height);
+}
+:where(html[data-admin-variant="1"])
+  #app-view
+  #main
+  :is(table .subline, .credential-main .hint, .dense-time, .dense-tag) {
+  font-size: var(--table-meta-size);
+  font-weight: 400;
+  line-height: var(--table-line-height);
+}
+:where(html[data-admin-variant="1"]) #app-view #main :is(table .subline, .dense-time, .dense-preview) {
+  color: var(--muted);
+}
+:where(html[data-admin-variant="1"]) #app-view #main .dense-preview {
+  font-size: var(--table-body-size);
+  font-weight: 400;
+  line-height: var(--table-line-height);
+}
+:where(html[data-admin-variant="1"]) #app-view #main .dense-row {
+  min-height: 32px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+:where(html[data-admin-variant="1"]) #app-view #main table .num {
+  font-size: var(--table-meta-size);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 640px) {
+  :where(html[data-admin-variant="1"]) #app-view #main .dense-row {
+    min-height: 44px;
+  }
+}
