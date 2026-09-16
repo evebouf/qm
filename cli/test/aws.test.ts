@@ -2727,6 +2727,15 @@ test("AWS builds one immutable candidate manifest and deploys its exact digest w
     const current = state.dynamo["deployment/current"].manifestId.S;
     const deployed = JSON.parse(state.dynamo[`deployment/manifest/${current}`].manifest.S);
     assert.equal(state.definitions[deployed.tasks.core].containerDefinitions[0].image, candidate.images.core);
+    assert.equal(deployCalls.match(/ecs register-task-definition/g)?.length, 1);
+    assert.doesNotMatch(deployCalls, /ecs deregister-task-definition/);
+    assert.ok(deployCalls.includes(`--task-definition ${deployed.tasks.core} --launch-type FARGATE`));
+    assert.ok(state.definitions[deployed.tasks.core].containerDefinitions[0].healthCheck);
+    writeFileSync(fake.log, "");
+    await awsUp(single, dir, { yes: true, candidate: candidatePath });
+    const repeatCalls = readFileSync(fake.log, "utf8");
+    assert.doesNotMatch(repeatCalls, /ecs (?:register-task-definition|deregister-task-definition|update-service)/);
+    assert.ok(repeatCalls.includes(`--task-definition ${deployed.tasks.core} --launch-type FARGATE`));
     assert.ok(Number.isFinite(Date.parse(deployed.dbRestorePoint)));
   } finally {
     process.env.PATH = priorPath;
@@ -2968,6 +2977,38 @@ test("AWS migration failure deregisters the candidate task and releases the depl
     await assert.rejects(() => awsMigrateCandidate(oneServiceConfig(), dir, candidatePath), /migration task failed/);
     const calls = readFileSync(fake.log, "utf8");
     assert.match(calls, /ecs deregister-task-definition/);
+    assert.match(calls, /dynamodb delete-item/);
+  } finally {
+    fake.restore();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("AWS candidate deploy migration failure preserves the runtime and releases the lease", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "qm-aws-candidate-migrate-failure-"));
+  const candidatePath = join(dir, "candidate.json");
+  writeFileSync(
+    candidatePath,
+    JSON.stringify({
+      contract: 1,
+      accountId: "123456789012",
+      region: "us-west-2",
+      label: "candidate-deadbeef",
+      images: {
+        core: `123456789012.dkr.ecr.us-west-2.amazonaws.com/qm-core@sha256:${"a".repeat(64)}`,
+      },
+      imageProvenance: { core: { kind: "source-build", source: "checkout" } },
+    }),
+  );
+  const fake = statefulAws(dir, oneServiceConfig(), {}, { migrationExitCode: 1 });
+  const before = JSON.parse(readFileSync(fake.state, "utf8"));
+  try {
+    await assert.rejects(() => awsUp(oneServiceConfig(), dir, { yes: true, candidate: candidatePath }), /migration task failed/);
+    const calls = readFileSync(fake.log, "utf8");
+    assert.doesNotMatch(calls, /ecs (?:deregister-task-definition|update-service)/);
+    assert.equal(calls.match(/ecs register-task-definition/g)?.length, 1);
+    const state = JSON.parse(readFileSync(fake.state, "utf8"));
+    assert.equal(state.services["acme-core"].taskDefinition, before.services["acme-core"].taskDefinition);
     assert.match(calls, /dynamodb delete-item/);
   } finally {
     fake.restore();
