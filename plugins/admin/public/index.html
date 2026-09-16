@@ -8778,21 +8778,6 @@
       function fileUploadBox() {
         const box = document.createElement("div");
         box.className = "file-upload";
-        const main = document.createElement("div");
-        main.className = "file-upload-main";
-        const glyph = document.createElement("span");
-        glyph.className = "file-upload-icon";
-        glyph.textContent = "⇧";
-        const label = document.createElement("span");
-        label.append(
-          "Upload to ",
-          (() => {
-            const s = document.createElement("strong");
-            s.textContent = scopeTitle(scope);
-            return s;
-          })(),
-        );
-        main.append(glyph, label);
         const actions = document.createElement("div");
         actions.className = "file-upload-actions";
         const status = document.createElement("span");
@@ -8873,7 +8858,7 @@
           upload(e.dataTransfer.files || []);
         };
         actions.append(status, button, input);
-        box.append(main, actions);
+        box.append(actions);
         return box;
       }
       function fmtDuration(start, end) {
@@ -11943,7 +11928,7 @@
               designSpec(
                 "File list and upload toolbar",
                 "denseList() + fileThumb() · .file-upload · visual upload example, no network requests",
-                '<div class="file-upload"><div class="file-upload-main"><span class="file-upload-icon" aria-hidden="true">⇧</span><span>Upload to <strong>Example team</strong></span></div><div class="file-upload-actions"><button type="button" id="design-upload">Upload</button></div></div><div id="design-file-list"></div><p class="hint" id="design-file-status" role="status">File names, thumbnails, sizes, and dates stay visible.</p>',
+                '<div class="file-upload"><div class="file-upload-actions"><button type="button" id="design-upload">Upload</button></div></div><div id="design-file-list"></div><p class="hint" id="design-file-status" role="status">File names, thumbnails, sizes, and dates stay visible.</p>',
                 true,
               ),
               designSpec(
