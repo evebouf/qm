@@ -2,9 +2,13 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createMemorySurfaceCache } from "../src/surface-cache/surface-cache.ts";
 import { createSlackHistoryReader } from "../src/slack/history.ts";
+import type { BotIdentity } from "../src/slack/directory.ts";
 import type { SlackCoreClient } from "../src/api/slack-core-client.ts";
 
-const ids = { botUserId: "UBOT", ownBotId: "BBOT" };
+const ids: BotIdentity = {
+  botUserId: "UBOT", ownBotId: "BBOT", ownTeamId: "T1", botHandle: "qm",
+  ownWorkspaceUrl: "https://example.slack.com", identityMode: "slack-id",
+};
 const ts = (n: number) => `1000.${String(n).padStart(6, "0")}`;
 
 for (const size of [199, 200, 201]) {
