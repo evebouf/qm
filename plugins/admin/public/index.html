@@ -222,12 +222,18 @@
         letter-spacing: 0;
         line-height: 1;
       }
-      .header-home {
+      .header-home,
+      :where(html[data-admin-variant="1"]) #app-view #main #shellbar .back {
         display: inline-flex;
         align-items: center;
         flex: 0 0 auto;
         gap: 6px;
         margin-right: auto;
+        width: fit-content;
+        min-height: 0;
+        line-height: 1.4;
+        border-radius: 0;
+        box-shadow: none;
         padding: 0;
         border: 0;
         background: transparent;
@@ -237,10 +243,12 @@
         text-decoration: none;
         white-space: nowrap;
       }
-      .header-home:hover {
+      .header-home:hover,
+      :where(html[data-admin-variant="1"]) #app-view #main #shellbar .back:hover {
         color: var(--text);
       }
-      .header-home:focus-visible {
+      .header-home:focus-visible,
+      :where(html[data-admin-variant="1"]) #app-view #main #shellbar .back:focus-visible {
         outline: 2px solid var(--text);
         outline-offset: 4px;
         border-radius: 2px;
@@ -8787,7 +8795,9 @@
         status.className = "status muted";
         const button = document.createElement("button");
         button.type = "button";
-        button.textContent = "Upload";
+        button.className = "primary upload-button";
+        button.innerHTML =
+          '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/></svg><span>Upload</span>';
         const input = document.createElement("input");
         input.type = "file";
         input.multiple = true;
@@ -9441,7 +9451,11 @@
           const b = document.createElement("button");
           b.type = "button";
           b.className = "back";
-          b.textContent = opts.back.label;
+          if (adminVariant === "1") {
+            const label = document.createElement("span");
+            label.textContent = opts.back.label.replace(/^←\s*/, "");
+            b.append($("home-link").querySelector("svg").cloneNode(true), label);
+          } else b.textContent = opts.back.label;
           b.onclick = opts.back.onClick;
           if (adminVariant === "1") {
             const row = document.createElement("div");
@@ -11933,7 +11947,7 @@
               designSpec(
                 "File list and upload toolbar",
                 "denseList() + fileThumb() · .file-upload · visual upload example, no network requests",
-                '<div class="file-upload"><div class="file-upload-actions"><button type="button" id="design-upload">Upload</button></div></div><div id="design-file-list"></div><p class="hint" id="design-file-status" role="status">File names, thumbnails, sizes, and dates stay visible.</p>',
+                '<div class="file-upload"><div class="file-upload-actions"><button type="button" class="primary upload-button" id="design-upload"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/></svg><span>Upload</span></button></div></div><div id="design-file-list"></div><p class="hint" id="design-file-status" role="status">File names, thumbnails, sizes, and dates stay visible.</p>',
                 true,
               ),
               designSpec(
@@ -20277,6 +20291,7 @@
         let scopeWrap = null;
         if (index) {
           scopeWrap = document.createElement("div");
+          scopeWrap.className = "file-scope-index";
           scopeWrap.appendChild(
             scopeIndexList(all, {
               latestOf: (f) => f.createdAt || 0,
@@ -20294,6 +20309,7 @@
         }
         const fileWrap = document.createElement("div");
         fileWrap.append(list, ...(searchWrap ? [searchWrap] : []), noMatch);
+        const uploadBox = fileUploadBox();
         wireScopeSearch({
           key: "files",
           indexWrap: scopeWrap,
@@ -20313,11 +20329,12 @@
                   },
                 }),
             title: index ? VIEW_TITLE.files : shortName(scope),
+            actions: adminVariant === "1" ? [uploadBox] : [],
             count: files.length ? plural(files.length, "file") : "",
           },
           placeholder: index ? "Search all files…" : "Search files…",
         });
-        root.appendChild(fileUploadBox());
+        if (adminVariant !== "1") root.appendChild(uploadBox);
         const card = bareDataCard(fileWrap);
         if (scopeWrap) card.querySelector(".body").prepend(scopeWrap);
         root.appendChild(card);

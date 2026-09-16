@@ -1982,30 +1982,6 @@ dialog.credential-dialog {
 :where(html[data-admin-variant="1"]) #app-view #main #shellbar .shell-back-row:empty {
   display: none;
 }
-:where(html[data-admin-variant="1"]) #app-view #main #shellbar .back {
-  flex: 0 0 auto;
-  width: fit-content;
-  min-height: 28px;
-  padding: 2px 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 400;
-  text-decoration: none;
-}
-:where(html[data-admin-variant="1"]) #app-view #main #shellbar .back:hover {
-  background: transparent;
-  color: var(--text);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-:where(html[data-admin-variant="1"]) #app-view #main #shellbar .back:focus-visible {
-  outline: 2px solid var(--cta);
-  outline-offset: 3px;
-}
 
 :where(html[data-admin-variant="1"]) #app-view #main {
   --table-body-size: 13px;
@@ -2073,6 +2049,23 @@ dialog.credential-dialog {
   }
 }
 
+:where(html[data-admin-variant="1"]) #app-view #main #shellbar .file-upload {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+:where(html[data-admin-variant="1"]) #app-view #main .upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+:where(html[data-admin-variant="1"]) #app-view #main .upload-button svg {
+  flex-shrink: 0;
+}
+
 :where(html[data-admin-variant="1"]) #who {
   gap: 16px;
 }
@@ -2132,5 +2125,32 @@ dialog.credential-dialog {
   }
   :where(html[data-admin-variant="1"]) #who #signout {
     min-height: 44px;
+  }
+}
+
+:where(html[data-admin-variant="1"]) #app-view #main .file-scope-index .dense-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 110px minmax(144px, 1fr);
+  gap: 12px;
+}
+:where(html[data-admin-variant="1"]) #app-view #main .file-scope-index .dense-name {
+  max-width: none;
+  min-width: 0;
+}
+:where(html[data-admin-variant="1"]) #app-view #main .file-scope-index .dense-preview {
+  font-variant-numeric: tabular-nums;
+}
+:where(html[data-admin-variant="1"]) #app-view #main .file-scope-index .dense-time {
+  margin-left: 0;
+  text-align: right;
+}
+@media (max-width: 640px) {
+  :where(html[data-admin-variant="1"]) #app-view #main .file-scope-index .dense-row {
+    grid-template-columns: minmax(0, 1fr) 76px;
+    gap: 4px 12px;
+  }
+  :where(html[data-admin-variant="1"]) #app-view #main .file-scope-index .dense-time {
+    grid-column: 1 / -1;
+    text-align: left;
   }
 }
