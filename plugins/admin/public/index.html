@@ -96,6 +96,7 @@
       }
       html {
         min-height: 100%;
+        scrollbar-gutter: stable;
         overflow-x: hidden;
         background: var(--bg);
       }
@@ -8112,7 +8113,7 @@
     <nav class="admin-variant-toggle" aria-label="Design variant">
       <span class="admin-seed-data-note" title="This page includes development seed data.">Seed data</span>
       <a data-admin-design="original" href="?variant=original">Original</a>
-      <a data-admin-design="1" href="?variant=1">Variant 1</a>
+      <a data-admin-design="1" href="?variant=1">New</a>
     </nav>
     <script>
       const adminVariant = new URLSearchParams(location.search).get("variant") === "1" ? "1" : "original";
@@ -11890,7 +11891,7 @@
         ).join("");
 
         root.innerHTML = [
-          '<p class="lead">Components and page patterns from the redesigned admin portal, including Skills, Files, Sessions, Metrics, Audit, and Egress. The layout guidance describes Variant 1; switch to Original to compare controls. Examples use fictional data and do not save changes.</p>',
+          '<p class="lead">Components and page patterns from the redesigned admin portal, including Skills, Files, Sessions, Metrics, Audit, and Egress. The layout guidance describes New; switch to Original to compare controls. Examples use fictional data and do not save changes.</p>',
           designSection("Foundations", "One palette, a small type scale, and consistent spacing.", [
             designSpec(
               "Semantic colors",
@@ -11916,8 +11917,8 @@
               ),
               designSpec(
                 "Width and page padding",
-                "Current Variant 1 CSS · index.html and admin-components.css",
-                '<div class="tablewrap"><table><thead><tr><th>Rule</th><th>Desktop</th><th>Small screens</th></tr></thead><tbody><tr><td>Navigation</td><td>280px sidebar; independent scroll</td><td>Horizontal navigation at ≤900px</td></tr><tr><td>Content width</td><td>960px maximum, centered; fluid below that</td><td>Available width; min-width: 0</td></tr><tr><td>Main padding</td><td>28px top and sides</td><td>At ≤900px: 18px top, 14px sides with safe-area insets</td></tr><tr><td>Bottom clearance</td><td colspan="2">110px for the fixed Original / Variant 1 switch</td></tr><tr><td>Page heading</td><td colspan="2">22px / 500 weight; shared shell spacing 16px (activity pages use 24px)</td></tr><tr><td>Sections</td><td colspan="2">24px between artifact sections; 12px from section heading to content</td></tr><tr><td>Controls</td><td colspan="2">32px height · 6px radius · 8px gap · 4px label gap</td></tr></tbody></table></div>',
+                "Current New CSS · index.html and admin-components.css",
+                '<div class="tablewrap"><table><thead><tr><th>Rule</th><th>Desktop</th><th>Small screens</th></tr></thead><tbody><tr><td>Navigation</td><td>280px sidebar; independent scroll</td><td>Horizontal navigation at ≤900px</td></tr><tr><td>Content width</td><td>960px maximum, centered; fluid below that</td><td>Available width; min-width: 0</td></tr><tr><td>Main padding</td><td>28px top and sides</td><td>At ≤900px: 18px top, 14px sides with safe-area insets</td></tr><tr><td>Bottom clearance</td><td colspan="2">110px for the fixed Original / New switch</td></tr><tr><td>Page heading</td><td colspan="2">22px / 500 weight; shared shell spacing 16px (activity pages use 24px)</td></tr><tr><td>Sections</td><td colspan="2">24px between artifact sections; 12px from section heading to content</td></tr><tr><td>Controls</td><td colspan="2">32px height · 6px radius · 8px gap · 4px label gap</td></tr></tbody></table></div>',
                 true,
               ),
               designSpec(
