@@ -1,3 +1,4 @@
+import type { SubscribeOptions } from "../util/event-bus.ts";
 import type { TurnResult } from "../types.ts";
 import type { OrchestratorInput } from "../core/orchestrator.ts";
 
@@ -50,6 +51,8 @@ export interface EnqueueResult {
 
 export interface RunStore {
   readonly maxClaims?: number;
+
+  subscribeAvailable?(listener: () => void, options?: SubscribeOptions): () => void;
 
   enqueue(input: EnqueueInput): Promise<EnqueueResult>;
   getByDedupKey(dedupKey: string): Promise<Run | null>;

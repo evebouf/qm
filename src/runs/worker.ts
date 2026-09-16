@@ -108,6 +108,7 @@ export async function processRun(deps: ProcessDeps, run: Run, opts?: { backgroun
 
 export interface WorkerDeps extends ProcessDeps {
   pollMs?: number;
+  recoveryPollMs?: number;
   workerId?: string;
   sessions: SessionStore;
   canClaim?: () => boolean;
@@ -126,6 +127,27 @@ const STOP_DRAIN_MS = 2_000;
 export function createWorker(deps: WorkerDeps): Worker {
   const workerId = deps.workerId ?? `w-${randomUUID().slice(0, 8)}`;
   const pollMs = deps.pollMs ?? 50;
+  const recoveryPollMs = deps.recoveryPollMs ?? 5_000;
+  const notifications = Boolean(deps.runs.subscribeAvailable);
+  let generation = 0;
+  let wake: (() => void) | null = null;
+  let unsubscribe: (() => void) | undefined;
+  const notify = (): void => {
+    generation++;
+    wake?.();
+  };
+  async function waitForWork(observed: number): Promise<void> {
+    if (stopped || observed !== generation) return;
+    await new Promise<void>((resolve) => {
+      const done = (): void => {
+        clearTimeout(timer);
+        wake = null;
+        resolve();
+      };
+      const timer = setTimeout(done, notifications ? recoveryPollMs : pollMs);
+      wake = done;
+    });
+  }
   let stopped = false;
   let loopDone: Promise<void> | null = null;
   let inFlight: { runId: string; leaseToken: string; threadRef: string } | null = null;
@@ -139,6 +161,7 @@ export function createWorker(deps: WorkerDeps): Worker {
         await sleep(pollMs);
         continue;
       }
+      const observed = generation;
       let run: Run | null;
       try {
         run = await deps.runs.claim(workerId, deps.leaseTtlMs);
@@ -151,7 +174,7 @@ export function createWorker(deps: WorkerDeps): Worker {
         continue;
       }
       if (!run) {
-        await sleep(pollMs);
+        await waitForWork(observed);
         continue;
       }
       if (stopped) {
@@ -178,6 +201,9 @@ export function createWorker(deps: WorkerDeps): Worker {
     start() {
       if (loopDone) return;
       stopped = false;
+      unsubscribe = deps.runs.subscribeAvailable?.(notify, {
+        onResync: notify,
+      });
       loopDone = loop();
     },
     busy() {
@@ -205,6 +231,9 @@ export function createWorker(deps: WorkerDeps): Worker {
     },
     async stop(drainMs = STOP_DRAIN_MS) {
       stopped = true;
+      unsubscribe?.();
+      unsubscribe = undefined;
+      notify();
       await Promise.race([loopDone, sleep(drainMs, { unref: true })]);
       loopDone = null;
     },
