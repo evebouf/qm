@@ -1602,7 +1602,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         provisionScratch,
         provisionResource,
         provisionOwnerAuth,
-        ensureSkillTree,
+        readSkill,
+        prepareSkillAssets,
         provisionForReach,
         reclaimBox,
         provisionPending,
@@ -2158,7 +2159,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           ...(provisionOwnerAuth ? { provisionOwnerAuth } : {}),
           ...(ownerAuthCommand ? { ownerAuthCommand } : {}),
           ...(scopedCommand ? { scopedCommand } : {}),
-          ensureSkillTree,
+          readSkill,
+          prepareSkillAssets,
           ...(reachAvailable
             ? {
                 reach: {

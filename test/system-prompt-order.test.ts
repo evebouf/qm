@@ -794,7 +794,7 @@ for (const location of [
     assert.equal(read.status, "ok", read.reason);
     assert.doesNotMatch(read.reply ?? "", /!security-risk|!security-screen-unavailable/);
     assert.equal(disk.has("skills/carried-method/SKILL.md"), false);
-    assert.ok(disk.has("skills/local-method/SKILL.md"));
+    assert.equal(disk.has("skills/local-method/SKILL.md"), false);
   });
 }
 

@@ -9,7 +9,7 @@ import type { AuditLog } from "../audit/audit-log.ts";
 import type { MemoryService } from "../memory/memory-service.ts";
 import { recallMemoryScopes, writableMemoryScope, type MemoryPolicy } from "../memory/policy.ts";
 import type { SkillStore, GrantedSkillRef } from "../skills/skill-store.ts";
-import type { Resolution, ScopeId, Principal } from "../types.ts";
+import { personalScope, type Resolution, type ScopeId, type Principal } from "../types.ts";
 import { carriedFileHandles, sharingSourcesForTurn } from "./sharing-access.ts";
 
 type ContextInput = Omit<Parameters<typeof sharingSourcesForTurn>[0], "posture"> & {
@@ -69,16 +69,6 @@ export async function resolveTurnContext(input: ContextInput) {
     (useMemory && memoryPolicy.capture !== "off") || read.length
       ? { ...(useMemory && memoryPolicy.capture !== "off" ? { write: memoryScopeId } : {}), read }
       : undefined;
-  const skillScopes = [
-    ...new Set([
-      memoryScopeId,
-      ...resolution.layers
-        .filter((layer) => layer.mode === "ro" && layer.scopeId !== resolution.orgScopeId)
-        .map((layer) => layer.scopeId),
-      ...sharingSources,
-      resolution.orgScopeId,
-    ]),
-  ];
   const recordRead = (scope: ScopeId, resource: string) => {
     if (!sharingSources.includes(scope)) return;
     input.auditLog?.record({
@@ -100,17 +90,6 @@ export async function resolveTurnContext(input: ContextInput) {
     ...resolution.grantedHandles,
     ...(await carriedFileHandles(sharingSources, input.workspace, input.files)),
   ];
-  const grantedSkills: GrantedSkillRef[] = (
-    await input.acl
-      .sharedOfKindForAudience(
-        "skill",
-        input.audience,
-        input.targetScope,
-        resolution.orgScopeId,
-        principalEntitledToScope,
-      )
-      .catch(swallowAs("context: skill grants for audience", []))
-  ).map((grant) => ({ id: parseRef(grant.ref).id, ownerScopeId: grant.ownerScopeId }));
   return {
     sharingSources,
     memoryScopeId,
@@ -119,7 +98,34 @@ export async function resolveTurnContext(input: ContextInput) {
     recall: memories.recall,
     searchMemory: memories.search,
     listFiles: () => handles,
-    listSkills: async () => (await input.skills?.visibleFor(skillScopes, grantedSkills)) ?? [],
+    listSkills: async () => {
+      const posture = input.config
+        ? await input.config.resolveSharingPostureDurable(personalScope(input.actor.id), input.targetScope)
+        : resolution.sharingPosture;
+      const currentSources = await sharingSourcesForTurn({ ...input, posture });
+      const skillScopes = [
+        ...new Set([
+          memoryScopeId,
+          ...resolution.layers
+            .filter((layer) => layer.mode === "ro" && layer.scopeId !== resolution.orgScopeId)
+            .map((layer) => layer.scopeId),
+          ...sharingSources.filter((scope) => currentSources.includes(scope)),
+          resolution.orgScopeId,
+        ]),
+      ];
+      const grantedSkills: GrantedSkillRef[] = (
+        await input.acl
+          .sharedOfKindForAudience(
+            "skill",
+            input.audience,
+            input.targetScope,
+            resolution.orgScopeId,
+            principalEntitledToScope,
+          )
+          .catch(swallowAs("context: skill grants for audience", []))
+      ).map((grant) => ({ id: parseRef(grant.ref).id, ownerScopeId: grant.ownerScopeId }));
+      return (await input.skills?.visibleFor(skillScopes, grantedSkills)) ?? [];
+    },
     readFile: (path: string) =>
       readContextFile(path, handles, input.workspace, input.files, (grant) => {
         if (grant.carried) recordRead(grant.ownerScopeId, grant.ownerPath);

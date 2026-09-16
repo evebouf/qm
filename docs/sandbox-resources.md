@@ -10,21 +10,21 @@ The initial agent interface restricts inventory and operations to the current ow
 
 ## Agent actions
 
-| Action              | Parameters                                                                                                  |
-| ------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `list`              | `purpose`; returns providers, capabilities, resources and default                                           |
-| `create`            | `backend`, optional `name`, `purpose`; creates a blank resource                                             |
-| `set_default`       | `sandbox_id` or null, `purpose`; changes routing                                                            |
-| `status`, `restart` | optional `sandbox_id`, `purpose`                                                                            |
-| `retire`            | `sandbox_id`, `purpose`                                                                                     |
-| `exec`              | `command`, `purpose`, optional `sandbox_id`, `timeout_seconds`, and supported routing/credential parameters |
-| `start_process`     | `command`, optional `sandbox_id`, `timeout_seconds`, `purpose`; returns a process ID                        |
-| `read_process`      | `process_id`, optional `since_cursor`, `wait_seconds`, `max_bytes`                                          |
-| `write_stdin`       | `process_id`, `data`; newline is not appended                                                               |
-| `signal_process`    | `process_id`, optional `signal` (`TERM`, `KILL`, `INT`, `HUP`, `QUIT`)                                      |
-| `list_processes`    | lists jobs belonging to this scope                                                                          |
-| `watch_process`     | `process_id`, optional `since_cursor`, `pattern`, `instructions`; returns a monitor ID                      |
-| `unwatch_process`   | `monitor_id`                                                                                                |
+| Action              | Parameters                                                                                                            |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `list`              | `purpose`; returns providers, capabilities, resources and default                                                     |
+| `create`            | `backend`, optional `name`, `purpose`; creates a blank resource                                                       |
+| `set_default`       | `sandbox_id` or null, `purpose`; changes routing                                                                      |
+| `status`, `restart` | optional `sandbox_id`, `purpose`                                                                                      |
+| `retire`            | `sandbox_id`, `purpose`                                                                                               |
+| `exec`              | `command`, `purpose`, optional `skills`, `sandbox_id`, `timeout_seconds`, and supported routing/credential parameters |
+| `start_process`     | `command`, optional `skills`, `sandbox_id`, `timeout_seconds`, `purpose`; returns a process ID                        |
+| `read_process`      | `process_id`, optional `since_cursor`, `wait_seconds`, `max_bytes`                                                    |
+| `write_stdin`       | `process_id`, `data`; newline is not appended                                                                         |
+| `signal_process`    | `process_id`, optional `signal` (`TERM`, `KILL`, `INT`, `HUP`, `QUIT`)                                                |
+| `list_processes`    | lists jobs belonging to this scope                                                                                    |
+| `watch_process`     | `process_id`, optional `since_cursor`, `pattern`, `instructions`; returns a monitor ID                                |
+| `unwatch_process`   | `monitor_id`                                                                                                          |
 
 Process actions also accept optional `purpose` for approval context. Unrelated fields are rejected rather than silently ignored. `exec` retains the enabled scoped, scratch, owner-auth and reached-room routing options and command credential handles. Process starts use the default or a named authorized resource; subsequent operations use the process ID's durable saved target, even after the scope default changes. Watches retain their durable monitor registration and wake this conversation with output or exit. Provider loss or expiry can still interrupt a process.
 

@@ -225,7 +225,7 @@ function fakeSandbox() {
   return { sandbox, files };
 }
 
-test("a bundled skill round-trips seed → store → materialize, assets land beside SKILL.md", async () => {
+test("a bundled skill round-trips seed → store → materialize, only assets land", async () => {
   const skills = createSkillStore({ signingSecret: "seed-test-secret" });
   const org = scopeId("org", "default-org");
   const dir = mkdtempSync(join(tmpdir(), "seed-tree-"));
@@ -249,7 +249,7 @@ test("a bundled skill round-trips seed → store → materialize, assets land be
   const handle: SandboxHandle = { id: "h", rootDir: "/workspace" };
   const resolved = await skills.resolve("tooled", [org]);
   await materializeSkillTree(sandbox, handle, resolved);
-  assert.equal(files.get("skills/tooled/SKILL.md"), tooled.manifest.body);
+  assert.equal(files.has("skills/tooled/SKILL.md"), false);
   assert.equal(files.get("skills/tooled/scripts/hello.py"), "print('hi')\n");
   assert.equal(files.get("skills/tooled/references/notes.md"), "# notes\n");
 });

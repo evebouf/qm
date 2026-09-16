@@ -368,7 +368,11 @@ export function createMockHarness(): Harness {
           if (command0.startsWith("!scratch ")) tag = "!scratch ";
           else if (command0.startsWith("!owner ")) tag = "!owner ";
           const inboxDir = /available in \.\/(\S+?)\/:/.exec(turn.environment ?? "")?.[1] ?? "inbox";
-          const command = cmd.slice(cmd.indexOf(tag) + tag.length).replaceAll("{INBOX}", inboxDir);
+          const raw = cmd.slice(cmd.indexOf(tag) + tag.length);
+          const request = raw.startsWith('{"command":')
+            ? (JSON.parse(raw) as { command: string; skills?: string[]; sandboxId?: string })
+            : { command: raw };
+          const command = request.command.replaceAll("{INBOX}", inboxDir);
           if (gateTool("execute")) {
             await turn.emit({
               type: "tool_call",
@@ -379,9 +383,12 @@ export function createMockHarness(): Harness {
             reply = "";
           } else {
             await turn.emit({ type: "tool_call", payload: { tool: "execute", command }, scopeLabel: turn.scopeLabel });
-            let opts: { scratch?: boolean; ownerAuth?: boolean } | undefined;
-            if (tag === "!scratch ") opts = { scratch: true };
-            else if (tag === "!owner ") opts = { ownerAuth: true };
+            const opts = {
+              ...(tag === "!scratch " ? { scratch: true } : {}),
+              ...(tag === "!owner " ? { ownerAuth: true } : {}),
+              ...(request.skills !== undefined ? { skills: request.skills } : {}),
+              ...(request.sandboxId ? { sandboxId: request.sandboxId } : {}),
+            };
             const result = await turn.tools.execute(command, opts);
             await turn.emit({ type: "tool_result", payload: result, scopeLabel: turn.scopeLabel });
             turn.onProgress?.({ toolCalls: 1 });

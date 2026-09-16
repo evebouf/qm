@@ -2,7 +2,7 @@
 
 Import skills from a **git repo of `SKILL.md` files** into the governed skill store — no code change,
 no image rebuild. An admin registers a _pack_, browses it, and imports skills **org-wide**; the
-skills then show on the admin Skills page and materialize onto boxes through the normal path.
+skills then show on the admin Skills page. Core serves their instructions directly; commands explicitly request their assets.
 
 ## How it works
 
@@ -11,7 +11,8 @@ git pack ──fetch(pinned ref)──▶ general normalizer ──▶ planInges
                                                                                       │
                                                           create→review→publish (shared upsert)
                                                                                       ▼
-                                                          org-scope SkillStore ──▶ materialize ──▶ box
+                                                          org-scope SkillStore ──▶ read instructions in core
+                                                                             └──▶ explicit assets ──▶ box
 ```
 
 - **One general normalizer** (`src/skills/normalize.ts`) maps any repo's frontmatter dialect onto the
@@ -70,3 +71,41 @@ commit.
 
 The skills are governed store records, visible and auditable on the admin Skills page, rather than
 ungoverned files on each box.
+
+## Reading instructions and using assets
+
+Read `skills/<name>/SKILL.md` with the `read` tool. Core resolves the currently visible published
+skill using the normal scope precedence, grants, connector availability, and sharing screens.
+This read makes no sandbox calls and installs nothing, even when no sandbox is available.
+Pack instructions include the pack-relative shared-file root.
+
+Before executing scripts or using templates and reference files, declare each dependency with
+`skills: ["name"]` on `execute` or background start, including unified `sandbox` actions `exec`
+and `start_process`. For example:
+
+```json
+{
+  "action": "exec",
+  "command": "python skills/report/scripts/render.py",
+  "skills": ["report"],
+  "sandbox_id": "selected-sandbox-id",
+  "purpose": "Render the report using the report skill"
+}
+```
+
+Only requested skills' assets and their shared pack files are copied onto the selected sandbox.
+Foreground execution also supports `scope: "scratch"`; background jobs retain their scoped or
+explicit named target. Shared pack files stay under `skills/.packs/<pack-id>/`. `SKILL.md` is
+never staged, and command text is never scanned to infer dependencies. To inspect a reference
+asset with `read`, first stage the skill with an execution request such as `command: "true"`.
+Invalid or invisible dependencies and copy failures stop execution. Dependencies cannot be
+staged into a reached room from another conversation; run from the target conversation instead.
+
+Assets are cached copies: repeated explicit requests preserve unchanged files, while requested
+updates replace changed content and remove deleted assets. Sandbox setup and each local execution
+reconcile the durable inventory, removing assets whose skill is no longer visible or whose
+same-named source changed, even when `skills` is omitted. Pre-upgrade instruction copies are
+removed when that sandbox is next reconciled. Reads of instructions always use the store, never
+those copies. Old untracked files outside the managed namespace cannot be identified safely and
+are preserved. Revocation cannot retract files a previous command copied elsewhere or bytes
+already held by a running process; this is asset distribution, not process isolation.

@@ -43,6 +43,19 @@ export interface ExecFileOps {
   removeDirAndList?(handle: SandboxHandle, removeRelDir: string, listRelDir: string): Promise<string[]>;
 }
 
+function removeDirCommand(handle: SandboxHandle, relDir: string): string {
+  const rel = relDir.replace(/^\/+|\/+$/g, "");
+  if (!rel) return "";
+  const abs = posixJoin(handle.rootDir, rel);
+  if (abs === handle.rootDir) return "";
+  const parts = rel.split("/");
+  const parents = parts.slice(0, -1).map((_, index) => posixJoin(handle.rootDir, parts.slice(0, index + 1).join("/")));
+  const guard = parents.length
+    ? `${parents.map((parent) => `[ ! -L ${shq(parent)} ]`).join(" && ")} || { printf '%s\\n' 'refusing to remove through symlink' >&2; exit 1; }; `
+    : "";
+  return `${guard}rm -rf ${shq(abs)} || exit $?; `;
+}
+
 export function createExecFileOps({ label, exec, writeInline, combineRemoveAndList }: ExecFileOpsDeps): ExecFileOps {
   return {
     async importFiles(handle, entries): Promise<void> {
@@ -78,9 +91,7 @@ export function createExecFileOps({ label, exec, writeInline, combineRemoveAndLi
     ...(combineRemoveAndList
       ? {
           async removeDirAndList(handle: SandboxHandle, removeRelDir: string, listRelDir: string): Promise<string[]> {
-            const remove = removeRelDir.replace(/^\/+/, "");
-            const abs = posixJoin(handle.rootDir, remove);
-            const prep = remove && abs !== handle.rootDir ? `rm -rf ${shq(abs)} || exit $?; ` : "";
+            const prep = removeDirCommand(handle, removeRelDir);
             const rel = listRelDir.replace(/^\/+/, "") || ".";
             const r = await exec(
               handle.id,
@@ -96,11 +107,9 @@ export function createExecFileOps({ label, exec, writeInline, combineRemoveAndLi
         }
       : {}),
     async removeDir(handle, relDir): Promise<void> {
-      const rel = relDir.replace(/^\/+/, "");
-      if (!rel) return;
-      const abs = posixJoin(handle.rootDir, rel);
-      if (abs === handle.rootDir) return;
-      const r = await exec(handle.id, `rm -rf ${shq(abs)}`, 60);
+      const command = removeDirCommand(handle, relDir);
+      if (!command) return;
+      const r = await exec(handle.id, command, 60);
       if (r.code !== 0) throw new Error(`${label} removeDir ${relDir} failed: ${r.stderr}`);
     },
   };

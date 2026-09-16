@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, rm, access } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, access, readFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -8,6 +8,30 @@ import { promisify } from "node:util";
 import { createExecFileOps } from "../src/sandbox/exec-file-ops.ts";
 
 const exec = promisify(execFile);
+
+for (const combined of [false, true]) {
+  test(`${combined ? "combined" : "standalone"} cleanup refuses symlink parents but can remove the link`, async (t) => {
+    const rootDir = await mkdtemp(join(tmpdir(), "qm-symlink-cleanup-'"));
+    t.after(() => rm(rootDir, { recursive: true, force: true }));
+    const ops = createExecFileOps({
+      label: "test",
+      combineRemoveAndList: combined,
+      exec: async (_id, script) => ({ ...(await exec("sh", ["-c", script])), code: 0 }),
+      writeInline: async () => {},
+    });
+    const handle = { id: "test", rootDir };
+    await mkdir(join(rootDir, "checkout"));
+    await writeFile(join(rootDir, "checkout/SKILL.md"), "checkout instructions");
+    await symlink(join(rootDir, "checkout"), join(rootDir, "linked"));
+    const remove = (path: string) =>
+      combined ? ops.removeDirAndList!(handle, path, ".") : ops.removeDir(handle, path);
+    await assert.rejects(() => remove("linked/SKILL.md"), /refusing to remove through symlink/);
+    assert.equal(await readFile(join(rootDir, "checkout/SKILL.md"), "utf8"), "checkout instructions");
+    await remove("linked");
+    await assert.rejects(access(join(rootDir, "linked")));
+    assert.equal(await readFile(join(rootDir, "checkout/SKILL.md"), "utf8"), "checkout instructions");
+  });
+}
 
 test("combined file cleanup removes only its target and lists remaining files in one command", async () => {
   const rootDir = await mkdtemp(join(tmpdir(), "qm-cleanup-'"));

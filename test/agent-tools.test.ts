@@ -2708,7 +2708,7 @@ test("unified sandbox dispatches every process action and preserves cursors, sig
     { sandboxResources: true },
   ).find((t) => t.name === "sandbox")!;
   const actions = [
-    { action: "start_process", command: "npm test", sandbox_id: "box-a", timeout_seconds: 123 },
+    { action: "start_process", command: "npm test", sandbox_id: "box-a", timeout_seconds: 123, skills: ["build"] },
     { action: "read_process", process_id: "bg-1", since_cursor: 7, wait_seconds: 2, max_bytes: 99 },
     { action: "write_stdin", process_id: "bg-1", data: "yes\n" },
     { action: "signal_process", process_id: "bg-1", signal: "INT" },
@@ -2724,7 +2724,7 @@ test("unified sandbox dispatches every process action and preserves cursors, sig
   ];
   for (const action of actions) assert.doesNotMatch(textOut(await call(tool, action)), /\[error\]/);
   assert.deepEqual(calls, [
-    { method: "backgroundStart", args: ["npm test", { ttlSeconds: 123, sandboxId: "box-a" }] },
+    { method: "backgroundStart", args: ["npm test", { ttlSeconds: 123, sandboxId: "box-a", skills: ["build"] }] },
     { method: "backgroundPoll", args: ["bg-1", { sinceCursor: 7, waitSeconds: 2, maxBytes: 99 }] },
     { method: "backgroundWrite", args: ["bg-1", "yes\n"] },
     { method: "backgroundStop", args: ["bg-1", "INT"] },
@@ -3234,4 +3234,56 @@ test("read passes turn cancellation through and cannot record a late success", a
   await assert.rejects(result, { name: "AbortError" });
   assert.equal(received, controller.signal);
   assert.equal(emitted.filter((e) => e.type === "tool_result").length, 0);
+});
+
+test("execute and unified sandbox forward explicit skill dependencies for scoped, scratch and named targets", async () => {
+  for (const unified of [false, true]) {
+    for (const target of [{}, { scope: "scratch" }, { sandbox_id: "box-a" }]) {
+      const sink: { lastExecOpts?: Parameters<ToolContext["execute"]>[1] } = {};
+      const tool = createAgentTools(
+        { current: fakeToolContext(sink), emit: () => {}, scopeLabel: "personal:U1" },
+        { sandboxResources: unified, scratchExec: true },
+      ).find((t) => t.name === (unified ? "sandbox" : "execute"))!;
+      const result = await call(tool, {
+        ...(unified ? { action: "exec" } : {}),
+        command: "true",
+        purpose: "Stage a template",
+        skills: ["report"],
+        ...target,
+      });
+      assert.doesNotMatch(textOut(result), /\[error\]/);
+      assert.deepEqual(sink.lastExecOpts?.skills, ["report"]);
+      if ("scope" in target) assert.equal(sink.lastExecOpts?.scratch, true);
+      if ("sandbox_id" in target) assert.equal(sink.lastExecOpts?.sandboxId, "box-a");
+    }
+  }
+});
+
+test("background start forwards skill dependencies on the legacy surface", async () => {
+  const calls: unknown[] = [];
+  const tc = fakeToolContext();
+  const start = tc.backgroundStart;
+  tc.backgroundStart = async (command, opts) => {
+    calls.push(opts);
+    return start(command, opts);
+  };
+  const tool = createAgentTools({ current: tc, emit: () => {}, scopeLabel: "personal:U1" }).find(
+    (t) => t.name === "background",
+  )!;
+  await call(tool, { action: "start", command: "true", skills: ["report"], sandbox_id: "box-a" });
+  assert.deepEqual(calls, [{ skills: ["report"], sandboxId: "box-a" }]);
+});
+
+test("unified sandbox validates skill arrays and rejects dependencies on unrelated actions", async () => {
+  const tool = createAgentTools(
+    { current: fakeToolContext(), emit: () => {}, scopeLabel: "personal:U1" },
+    { sandboxResources: true },
+  ).find((t) => t.name === "sandbox")!;
+  for (const action of ["exec", "start_process"]) {
+    for (const skills of ["report", [1], [null], [""]]) {
+      const result = await call(tool, { action, command: "true", purpose: "test", skills });
+      assert.match(textOut(result), /invalid/);
+    }
+  }
+  assert.match(textOut(await call(tool, { action: "read_process", process_id: "p", skills: ["report"] })), /invalid/);
 });

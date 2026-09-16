@@ -40,17 +40,14 @@ try {
   ]);
   const light = res("plain-skill", "# Plain\njust instructions");
 
-  console.log("materializeSkillIndex (eager, bodies only) …");
+  console.log("materializeSkillIndex (visibility metadata only) …");
   await materializeSkillIndex(sb, h, [heavy, light]);
-  assert((await sb.readFile(h, "skills/popular-web-designs/SKILL.md"))?.includes("entry point"), "heavy SKILL.md laid");
-  assert((await sb.readFile(h, "skills/plain-skill/SKILL.md"))?.includes("just instructions"), "light SKILL.md laid");
-  assert(
-    (await sb.readFile(h, "skills/popular-web-designs/scripts/render.py")) === null,
-    "asset NOT laid by index (lazy)",
-  );
+  assert((await sb.readFile(h, "skills/popular-web-designs/SKILL.md")) === null, "instructions are served by core");
+  assert((await sb.readFile(h, "skills/plain-skill/SKILL.md")) === null, "instructions are served by core");
+  assert((await sb.readFile(h, "skills/popular-web-designs/scripts/render.py")) === null, "asset NOT laid by index");
   console.log("  ok: bodies present, assets absent");
 
-  console.log("materializeSkillTree (lazy, assets + bundle, one tar) …");
+  console.log("materializeSkillTree (explicit assets + bundle, one tar) …");
   const b = bundle("pack1", [{ path: "lib/cite.mjs", content: "export const cite = 1\n" }]);
   await materializeSkillTree(sb, h, heavy, [b]);
   assert(

@@ -1,12 +1,19 @@
-import { test } from "node:test";
+import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { promisify } from "node:util";
 import { CapabilityUnsupportedError, type Sandbox, type SandboxHandle } from "../src/sandbox/sandbox.ts";
+import { createExecFileOps } from "../src/sandbox/exec-file-ops.ts";
 import type { SkillFile, SkillResolution } from "../src/skills/skill-store.ts";
 import {
   createSkillMaterializer,
   materializeSkillIndex,
   materializeSkillTree,
   safeSkillDirName,
+  skillInstructions,
 } from "../src/skills/materialize.ts";
 import { computeBundleHash, type SkillBundle } from "../src/skills/skill-bundle-store.ts";
 import { createMemoryAdvisoryLock } from "../src/persistence/advisory-lock.ts";
@@ -47,30 +54,107 @@ function fakeSandbox() {
   return { sandbox, files, calls };
 }
 
+async function filesystemSandbox(t: TestContext) {
+  const root = await mkdtemp(join(tmpdir(), "qm-skills-'"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const handle = { id: root, rootDir: join(root, "workspace") };
+  const checkout = join(root, "checkout");
+  await mkdir(handle.rootDir);
+  await mkdir(checkout);
+  const exec = promisify(execFile);
+  const sandbox = {
+    ...createExecFileOps({
+      label: "test",
+      exec: async (_id, script) => ({ ...(await exec("sh", ["-c", script])), code: 0 }),
+      writeInline: async (_id, path, data) => writeFile(path, data),
+    }),
+    async readFile(handle: SandboxHandle, path: string) {
+      try {
+        return await readFile(join(handle.rootDir, path), "utf8");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+        throw error;
+      }
+    },
+    async writeFile(handle: SandboxHandle, path: string, data: string) {
+      const absolute = join(handle.rootDir, path);
+      await mkdir(dirname(absolute), { recursive: true });
+      await writeFile(absolute, data);
+    },
+  } as unknown as Sandbox;
+  return { sandbox, handle, checkout };
+}
+
+for (const link of ["skills/alpha", "skills/alpha/nested", "skills/.packs/p", "skills/.packs/p/other"]) {
+  test(`reconciliation refuses cleanup through ${link} and preserves the checkout`, async (t) => {
+    const { sandbox, handle, checkout } = await filesystemSandbox(t);
+    const materializer = createSkillMaterializer();
+    const alpha = res("alpha", "body", [{ path: "nested/asset.txt", content: "asset" }], "p");
+    const bundles = [bundle("p", [{ path: "other/asset.txt", content: "shared asset" }])];
+    await materializer.stage(
+      sandbox,
+      handle,
+      ["alpha"],
+      async () => [alpha],
+      async () => bundles,
+    );
+    const marker = JSON.parse((await sandbox.readFile(handle, "skills/alpha/.tree"))!);
+    marker.skillPaths.push("skills/alpha/nested/SKILL.md");
+    marker.bundlePaths.push("skills/.packs/p/other/SKILL.md");
+    await sandbox.writeFile(handle, "skills/alpha/.tree", JSON.stringify(marker));
+    await writeFile(join(checkout, "SKILL.md"), "checkout instructions");
+    await mkdir(join(checkout, "other"));
+    await writeFile(join(checkout, "other/SKILL.md"), "nested checkout instructions");
+    const index = await sandbox.readFile(handle, "skills/.index");
+    await rm(join(handle.rootDir, link), { recursive: true });
+    await symlink(checkout, join(handle.rootDir, link));
+    alpha.skill!.manifest.body = "updated body";
+
+    await assert.rejects(
+      () =>
+        materializer.stage(
+          sandbox,
+          handle,
+          [],
+          async () => [alpha],
+          async () => bundles,
+        ),
+      /refusing to remove through symlink/,
+    );
+    assert.equal(await readFile(join(checkout, "SKILL.md"), "utf8"), "checkout instructions");
+    assert.equal(await readFile(join(checkout, "other/SKILL.md"), "utf8"), "nested checkout instructions");
+    assert.equal(await sandbox.readFile(handle, "skills/.index"), index);
+  });
+}
+
 test("materialized skill directory names are validated and never lossy", () => {
   assert.equal(safeSkillDirName("foo-bar_v1.2"), "foo-bar_v1.2");
   assert.throws(() => safeSkillDirName("foo/bar"), /skill name must/);
   assert.throws(() => safeSkillDirName(".."), /skill name must/);
 });
 
-test("materializeSkillIndex lays only each SKILL.md body + an index marker", async () => {
+test("materializeSkillIndex writes only metadata, without instructions or assets", async () => {
   const { sandbox, files, calls } = fakeSandbox();
   await materializeSkillIndex(sandbox, handle, [res("alpha", "A"), res("beta", "B")]);
 
-  assert.equal(files.get("skills/alpha/SKILL.md"), "A");
-  assert.equal(files.get("skills/beta/SKILL.md"), "B");
+  assert.equal(files.has("skills/alpha/SKILL.md"), false);
+  assert.equal(files.has("skills/beta/SKILL.md"), false);
   assert.ok(files.has("skills/.index"), "an index marker is written");
-  assert.equal(calls.writes, 3, "2 SKILL.md bodies + 1 marker — no asset writes");
+  assert.equal(calls.writes, 1, "only metadata is written");
 });
 
-test("materializeSkillIndex does NOT lay a skill's asset tree (that's lazy)", async () => {
+test("materializeSkillIndex does NOT lay a skill's asset tree", async () => {
   const { sandbox, files } = fakeSandbox();
   await materializeSkillIndex(sandbox, handle, [
     res("gamma", "G", [{ path: "scripts/hello.py", content: "print('hi')" }]),
   ]);
 
-  assert.equal(files.get("skills/gamma/SKILL.md"), "G", "the body is eager");
-  assert.equal(files.has("skills/gamma/scripts/hello.py"), false, "the asset is NOT laid until first read");
+  assert.equal(files.has("skills/gamma/SKILL.md"), false);
+  assert.equal(
+    files.has("skills/gamma/scripts/hello.py"),
+    false,
+    "the asset is NOT laid without an explicit dependency",
+  );
 });
 
 test("materializeSkillIndex SKIPS when the body set is unchanged (order-independent)", async () => {
@@ -88,7 +172,7 @@ test("materializeSkillIndex re-lays when a body changes", async () => {
   const writes = calls.writes;
   await materializeSkillIndex(sandbox, handle, [res("alpha", "A2")]);
   assert.ok(calls.writes > writes, "a changed body busts the index marker");
-  assert.equal(files.get("skills/alpha/SKILL.md"), "A2");
+  assert.equal(files.has("skills/alpha/SKILL.md"), false);
 });
 
 test("materializeSkillIndex does NOT re-lay when only an asset changes (asset is not in the index hash)", async () => {
@@ -96,7 +180,7 @@ test("materializeSkillIndex does NOT re-lay when only an asset changes (asset is
   await materializeSkillIndex(sandbox, handle, [res("gamma", "G", [{ path: "s.py", content: "v1" }])]);
   const writes = calls.writes;
   await materializeSkillIndex(sandbox, handle, [res("gamma", "G", [{ path: "s.py", content: "v2" }])]);
-  assert.equal(calls.writes, writes, "asset-only change doesn't touch the eager index");
+  assert.equal(calls.writes, writes, "asset-only change doesn't touch the visibility index");
 });
 
 test("materializeSkillIndex removes an archived skill's materialized tree", async () => {
@@ -127,7 +211,7 @@ test("materializeSkillIndex migrates a legacy hash marker without retaining old 
   await materializeSkillIndex(sandbox, handle, [alpha]);
   assert.equal(files.has("skills/removed/SKILL.md"), false);
   assert.equal(files.has("skills/removed/asset.txt"), false);
-  assert.equal(files.get("skills/alpha/SKILL.md"), "A");
+  assert.equal(files.has("skills/alpha/SKILL.md"), false);
   const migrated = JSON.parse(files.get("skills/.index")!);
   assert.equal(migrated.version, 2);
   assert.equal(migrated.legacyExternalPathsPreserved, true);
@@ -175,7 +259,7 @@ test("materializeSkillTree lays the asset tree + a per-skill marker", async () =
     ]),
   );
 
-  assert.equal(files.get("skills/gamma/SKILL.md"), "G", "SKILL.md is re-laid as part of the tree");
+  assert.equal(files.has("skills/gamma/SKILL.md"), false);
   assert.equal(files.get("skills/gamma/scripts/hello.py"), "print('hi')");
   assert.equal(files.get("skills/gamma/references/notes.md"), "# notes");
   assert.ok(files.has("skills/gamma/.tree"), "a per-skill tree marker is written");
@@ -184,7 +268,7 @@ test("materializeSkillTree lays the asset tree + a per-skill marker", async () =
 test("materializeSkillTree records and skips a clean body-only tree", async () => {
   const { sandbox, files, calls } = fakeSandbox();
   await materializeSkillTree(sandbox, handle, res("alpha", "A"));
-  assert.equal(files.get("skills/alpha/SKILL.md"), "A");
+  assert.equal(files.has("skills/alpha/SKILL.md"), false);
   assert.equal(files.has("skills/alpha/.tree"), true);
   const writes = calls.writes;
   await materializeSkillTree(sandbox, handle, res("alpha", "A"));
@@ -250,7 +334,7 @@ test("materializeSkillTree clears stale assets after marker deletion when the sk
 
   await materializeSkillTree(sandbox, handle, res("gamma", "G"));
   assert.equal(files.has("skills/gamma/old.py"), false);
-  assert.equal(files.get("skills/gamma/SKILL.md"), "G");
+  assert.equal(files.has("skills/gamma/SKILL.md"), false);
   assert.equal(files.has("skills/gamma/.tree"), true);
 });
 
@@ -359,7 +443,7 @@ test("fresh reconciliation prevents an older turn from regressing a newer projec
     async () => ({ resolution: current, bundles: [] }),
   );
 
-  assert.equal(files.get("skills/gamma/SKILL.md"), "G3");
+  assert.equal(files.has("skills/gamma/SKILL.md"), false);
   assert.equal(files.get("skills/gamma/s.py"), "v3");
   assert.equal(calls.removes, removes, "the stale empty index does not delete the current skill tree");
 });
@@ -372,7 +456,8 @@ test("materializeSkillTree confines a pack's shared bundle below its pack root",
       { path: "skills/conventions/quality.md", content: "q" },
     ]),
   ]);
-  assert.match(files.get("skills/gmail/SKILL.md") ?? "", /skills\/\.packs\/s1/);
+  assert.equal(files.has("skills/gmail/SKILL.md"), false);
+  assert.match(skillInstructions(res("gmail", "G", [], "s1")), /skills\/\.packs\/s1/);
   assert.equal(files.get("skills/.packs/s1/lib/cite.mjs"), "cite");
   assert.equal(files.get("skills/.packs/s1/skills/conventions/quality.md"), "q");
   assert.equal(files.get("lib/cite.mjs"), undefined, "pack bytes never overwrite the workspace root");
@@ -460,7 +545,7 @@ test("materializeSkillTree removes stale bundle paths but preserves another curr
     "a current owner's claim protects the shared path",
   );
   assert.equal(files.has("skills/.packs/shared-pack/lib/stale.mjs"), false, "an unclaimed old bundle path is removed");
-  assert.equal(files.get("skills/alpha/SKILL.md"), "A");
+  assert.equal(files.has("skills/alpha/SKILL.md"), false);
   assert.equal(files.has("skills/alpha/.tree"), true, "the clean body-only projection remains idempotent");
 });
 
@@ -519,12 +604,154 @@ test("switching a same-named skill source removes prior private assets before an
   assert.ok([...files.values()].some((body) => body.includes("PRIVATE_ASSET")));
   assert.ok([...files.values()].some((body) => body.includes("PRIVATE_PACK")));
   await materializeSkillIndex(sandbox, handle, [orgSkill]);
-  assert.equal(files.get("skills/deploy/SKILL.md"), "Same instructions");
+  assert.equal(files.has("skills/deploy/SKILL.md"), false);
   assert.equal(
     [...files.values()].some((body) => body.includes("PRIVATE_ASSET") || body.includes("PRIVATE_PACK")),
     false,
   );
   const writes = calls.writes;
   await materializeSkillIndex(sandbox, handle, [orgSkill]);
+  assert.equal(calls.writes, writes);
+});
+
+for (const [name, packId] of [
+  ["alpha", "p"],
+  ["SKILL.md", "SKILL.md"],
+] as const) {
+  test(`upgrading a version 2 inventory for ${name} removes all tracked instructions without dependencies`, async (t) => {
+    const { sandbox, handle } = await filesystemSandbox(t);
+    const materializer = createSkillMaterializer();
+    const alpha = res(name, "new instructions", [{ path: "script.py", content: "new" }], packId);
+    const beta = res("beta", "other instructions", [], packId);
+    const dir = `skills/${name}`;
+    const pack = `skills/.packs/${packId}`;
+    const skillPaths = [
+      `${dir}/SKILL.md`,
+      `${dir}/nested/SKILL.md`,
+      `${dir}/other/SKILL.md/child.txt`,
+      `${dir}/script.py`,
+    ];
+    const bundlePaths = [`${pack}/SKILL.md`, `${pack}/other/SKILL.md`, `${pack}/other/asset.txt`];
+    const index = {
+      version: 2,
+      hash: "pre-decoupling",
+      names: [name, "beta", "revoked"],
+      identities: Object.fromEntries(
+        [alpha, beta].map((r) => [r.skill!.manifest.name, JSON.stringify([r.skill!.scopeId, r.skill!.id])]),
+      ),
+    };
+    await sandbox.writeFile(handle, "skills/.index", JSON.stringify(index));
+    await sandbox.writeFile(
+      handle,
+      `${dir}/.tree`,
+      JSON.stringify({ version: 2, hash: "legacy-tree", skillPaths, bundlePaths }),
+    );
+    await sandbox.writeFile(
+      handle,
+      "skills/beta/.tree",
+      JSON.stringify({ version: 2, hash: "legacy-tree", skillPaths: [], bundlePaths }),
+    );
+    const instructions = [
+      `${dir}/SKILL.md`,
+      `${dir}/nested/SKILL.md`,
+      `${dir}/other/SKILL.md/child.txt`,
+      `${pack}/SKILL.md`,
+      `${pack}/other/SKILL.md`,
+      "skills/beta/SKILL.md",
+      "skills/revoked/SKILL.md",
+    ];
+    for (const path of instructions) await sandbox.writeFile(handle, path, "old instructions");
+    await sandbox.writeFile(handle, `${dir}/script.py`, "cached copy");
+    await sandbox.writeFile(handle, `${pack}/other/asset.txt`, "cached shared copy");
+    await sandbox.writeFile(handle, "skills/revoked/script.py", "private asset");
+    await sandbox.writeFile(handle, "untracked/SKILL.md", "unmanaged instructions");
+    const reconcile = () =>
+      materializer.stage(
+        sandbox,
+        handle,
+        [],
+        async () => [alpha, beta],
+        async () => {
+          throw new Error("no dependencies requested");
+        },
+      );
+    await reconcile();
+    const reconciledIndex = await sandbox.readFile(handle, "skills/.index");
+    assert.notEqual(reconciledIndex, JSON.stringify(index));
+    for (const path of [...instructions, `${dir}/SKILL.md`, "skills/revoked"])
+      await assert.rejects(access(join(handle.rootDir, path)));
+    assert.equal(await sandbox.readFile(handle, `${dir}/script.py`), "cached copy");
+    assert.equal(await sandbox.readFile(handle, `${pack}/other/asset.txt`), "cached shared copy");
+    assert.equal(await sandbox.readFile(handle, "untracked/SKILL.md"), "unmanaged instructions");
+    const tree = JSON.parse((await sandbox.readFile(handle, `${dir}/.tree`))!);
+    assert.deepEqual(tree.skillPaths, [`${dir}/script.py`]);
+    assert.deepEqual(tree.bundlePaths, [`${pack}/other/asset.txt`]);
+    assert.deepEqual(JSON.parse((await sandbox.readFile(handle, "skills/beta/.tree"))!).bundlePaths, tree.bundlePaths);
+    const before = await sandbox.listDir(handle, "skills");
+    await reconcile();
+    assert.deepEqual(await sandbox.listDir(handle, "skills"), before);
+    assert.equal(await sandbox.readFile(handle, "skills/.index"), reconciledIndex);
+    await materializer.stage(
+      sandbox,
+      handle,
+      [name],
+      async () => [alpha, beta],
+      async () => [],
+    );
+    assert.equal(await sandbox.readFile(handle, `${dir}/script.py`), "new");
+  });
+}
+
+for (const [name, packId] of [
+  ["alpha", "p"],
+  ["SKILL.md", "p"],
+  ["alpha", "SKILL.md"],
+] as const) {
+  test(`staging skill ${name} and pack ${packId} retains assets and excludes instruction paths`, async () => {
+    const { sandbox, files, calls } = fakeSandbox();
+    const assets = [
+      { path: "SKILL.md", content: "forged instructions" },
+      { path: "nested/SKILL.md", content: "nested instructions" },
+      { path: "SKILL.md/child.txt", content: "instruction directory" },
+      { path: "nested/SKILL.md/child.txt", content: "nested instruction directory" },
+      { path: "asset.txt", content: "asset" },
+      { path: "nested/asset.txt", content: "nested asset" },
+      { path: "../escape", content: "unsafe" },
+    ];
+    const materializer = createSkillMaterializer();
+    const alpha = res(name, "core body", assets, packId);
+    const stage = () =>
+      materializer.stage(
+        sandbox,
+        handle,
+        [name],
+        async () => [alpha],
+        async () => [bundle(packId, assets)],
+      );
+    await stage();
+    const skillPaths = [`skills/${name}/asset.txt`, `skills/${name}/nested/asset.txt`];
+    const bundlePaths = [`skills/.packs/${packId}/asset.txt`, `skills/.packs/${packId}/nested/asset.txt`];
+    assert.deepEqual(
+      [...files.keys()].sort(),
+      ["skills/.index", `skills/${name}/.tree`, ...skillPaths, ...bundlePaths].sort(),
+    );
+    for (const path of [...skillPaths, ...bundlePaths])
+      assert.equal(files.get(path), path.endsWith("nested/asset.txt") ? "nested asset" : "asset");
+    const marker = JSON.parse(files.get(`skills/${name}/.tree`)!);
+    assert.deepEqual(marker.skillPaths, skillPaths);
+    assert.deepEqual(marker.bundlePaths, bundlePaths);
+    const writes = calls.writes;
+    await stage();
+    assert.equal(calls.writes, writes);
+  });
+}
+
+test("an instruction-only edit preserves cached asset copies", async () => {
+  const { sandbox, files, calls } = fakeSandbox();
+  await materializeSkillTree(sandbox, handle, res("alpha", "body 1", [{ path: "template", content: "original" }]));
+  files.set("skills/alpha/template", "edited copy");
+  const writes = calls.writes;
+  await materializeSkillTree(sandbox, handle, res("alpha", "body 2", [{ path: "template", content: "original" }]));
+  assert.equal(files.get("skills/alpha/template"), "edited copy");
   assert.equal(calls.writes, writes);
 });

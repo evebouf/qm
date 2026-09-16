@@ -164,3 +164,37 @@ test("ambiguous file aliases fail closed in the shared reader", async () => {
   assert.ok(result && "error" in result);
   assert.match(result.error, /ambiguous shared handle/);
 });
+
+for (const revocation of ["membership", "sharing", "grant"] as const) {
+  test(`skill resolution rechecks ${revocation} revocation within the same turn`, async () => {
+    const { input, acl, config, removeMember } = await fixture();
+    await acl.grant(
+      {
+        ownerScopeId: "personal:owner",
+        ref: "skill:explicit",
+        granteeScopeId: "personal:alice",
+        permission: "read",
+        grantedBy: "owner",
+      },
+      "owner",
+    );
+    const seen: Array<{ scopes: readonly string[]; grants: unknown }> = [];
+    input.skills = {
+      visibleFor: async (scopes, grants) => {
+        seen.push({ scopes: [...scopes], grants });
+        return [];
+      },
+    } as Pick<NonNullable<typeof input.skills>, "visibleFor"> as NonNullable<typeof input.skills>;
+    const context = await resolveTurnContext(input);
+    await context.listSkills();
+    assert.ok(seen[0]!.scopes.includes("channel:eng"));
+    assert.deepEqual(seen[0]!.grants, [{ id: "explicit", ownerScopeId: "personal:owner" }]);
+    if (revocation === "membership") removeMember();
+    if (revocation === "sharing") await config.setSharingPosture("personal:alice", "isolated");
+    if (revocation === "grant")
+      await acl.revoke("personal:owner", "skill:explicit", "personal:alice", "owner", "owner");
+    await context.listSkills();
+    if (revocation === "grant") assert.deepEqual(seen[1]!.grants, []);
+    else assert.equal(seen[1]!.scopes.includes("channel:eng"), false);
+  });
+}

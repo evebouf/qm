@@ -71,19 +71,7 @@ import type { CapabilityClaims } from "../auth/capability-token.ts";
 import type { VisibleCron } from "../api/app.ts";
 import { createPlaygroundArtifact, type PlaygroundArtifact } from "../playgrounds/playground.ts";
 
-const SKILL_SKILLMD_RE = /^(?:\.\/)?skills\/([^/]+)\/SKILL\.md$/;
-function skillTreeDirFor(path: string): string | null {
-  const m = SKILL_SKILLMD_RE.exec(path);
-  return m ? m[1]! : null;
-}
-
-const SKILL_DIR_IN_COMMAND_RE = /(?:^|[\s'"=(&|;])(?:\.\/)?skills\/([^/\s'"&|;)]+)(?=[/\s'"&|;)]|$)/g;
-function skillTreeDirsInCommand(command: string): string[] {
-  const dirs = new Set<string>();
-  for (const m of command.matchAll(SKILL_DIR_IN_COMMAND_RE)) dirs.add(m[1]!);
-  return [...dirs];
-}
-
+const SKILL_SKILLMD_RE = /^skills\/([^/]+)\/SKILL\.md$/;
 export interface PublishInput {
   dir?: string;
   entrypoint?: string;
@@ -203,6 +191,7 @@ export interface ToolContext extends SurfaceToolDeps {
       reachTarget?: string;
       signal?: AbortSignal;
       credentials?: string[];
+      skills?: string[];
     },
   ): Promise<ExecResult & { reached?: ReachedProvenance }>;
   sandboxResources?(
@@ -224,7 +213,10 @@ export interface ToolContext extends SurfaceToolDeps {
   historyOpen(seq: number): Promise<string | null>;
   mcpToolDefs(): McpToolDescriptor[];
   callMcpTool(name: string, args: Record<string, unknown>): Promise<string>;
-  backgroundStart(command: string, opts?: { ttlSeconds?: number; sandboxId?: string }): Promise<BackgroundStartResult>;
+  backgroundStart(
+    command: string,
+    opts?: { ttlSeconds?: number; sandboxId?: string; skills?: string[] },
+  ): Promise<BackgroundStartResult>;
   backgroundPoll(
     processId: string,
     opts?: { sinceCursor?: number; maxBytes?: number; waitSeconds?: number },
@@ -432,7 +424,8 @@ export interface ToolContextDeps {
   provisionOwnerAuth?: () => Promise<SandboxHandle>;
   ownerAuthCommand?: (command: string) => string;
   scopedCommand?: (command: string) => string;
-  ensureSkillTree?: (skillDir: string, sandboxId?: string) => Promise<void>;
+  readSkill?: (name: string) => Promise<ReadResult>;
+  prepareSkillAssets?: (handle: SandboxHandle, names: string[]) => Promise<void>;
   reach?: {
     resolveChannel(query: string): Promise<ReachResolution>;
     provisionFor(scopeId: ScopeId): Promise<SandboxHandle>;
@@ -687,6 +680,7 @@ export function createToolContext(deps: ToolContextDeps): ToolContext {
         reachTarget?: string;
         signal?: AbortSignal;
         credentials?: string[];
+        skills?: string[];
       },
     ): Promise<ExecResult & { reached?: ReachedProvenance }> {
       const scratch = execOpts?.scratch === true;
@@ -725,6 +719,8 @@ export function createToolContext(deps: ToolContextDeps): ToolContext {
         });
       }
       const reachTarget = execOpts?.reachTarget;
+      if (reachTarget !== undefined && execOpts?.skills?.length)
+        throw new Error("run skill dependencies from the target conversation instead of a reached computer");
       if (
         [scratch, ownerAuth, reachTarget !== undefined, execOpts?.sandboxId !== undefined].filter(Boolean).length > 1
       ) {
@@ -781,10 +777,9 @@ export function createToolContext(deps: ToolContextDeps): ToolContext {
               ...(execOpts?.signal ? { signal: execOpts.signal } : {}),
             }
           : undefined;
-      const local = !scratch && !ownerAuth && reached === undefined && !execOpts?.sandboxId;
-      if ((local || execOpts?.sandboxId) && deps.ensureSkillTree) {
-        for (const skillDir of skillTreeDirsInCommand(command))
-          await deps.ensureSkillTree(skillDir, execOpts?.sandboxId);
+      if (!reached) {
+        if (execOpts?.skills?.length && !deps.prepareSkillAssets) throw new Error("skill assets are unavailable");
+        await deps.prepareSkillAssets?.(handle, execOpts?.skills ?? []);
       }
       return once(async () => {
         if (reached) {
@@ -811,6 +806,20 @@ export function createToolContext(deps: ToolContextDeps): ToolContext {
 
     async read(path: string, signal?: AbortSignal): Promise<ReadResult> {
       signal?.throwIfAborted();
+      const skillPath = path.startsWith("/")
+        ? path
+        : path
+            .split("/")
+            .filter((part) => part && part !== ".")
+            .join("/");
+      if (skillPath.startsWith("skills/") && hasParentPathSegment(skillPath))
+        throw new Error("invalid skill path: parent traversal is not allowed");
+      const skillName = SKILL_SKILLMD_RE.exec(skillPath)?.[1];
+      if (skillName) {
+        return deps.readSkill
+          ? withAbort(() => deps.readSkill!(skillName), signal)
+          : { content: null, sourceScopeId: null };
+      }
       if (path === MEMORY_FILE && deps.memory && deps.memoryScopeId) {
         if (!deps.memoryAccess?.read.includes(deps.memoryScopeId)) {
           throw new Error("memory recall is not enabled for this conversation; use the `memory` tool when enabled");
@@ -851,8 +860,6 @@ export function createToolContext(deps: ToolContextDeps): ToolContext {
         };
       }
       if (path.startsWith("shared/open-")) return { content: null, sourceScopeId: null };
-      const skillDir = skillTreeDirFor(path);
-      if (skillDir && deps.ensureSkillTree) await deps.ensureSkillTree(skillDir);
       signal?.throwIfAborted();
       const handle = await deps.provision();
       return timed("file_op", async () => {
@@ -1120,7 +1127,7 @@ export function createToolContext(deps: ToolContextDeps): ToolContext {
 
     async backgroundStart(
       command: string,
-      opts?: { ttlSeconds?: number; sandboxId?: string },
+      opts?: { ttlSeconds?: number; sandboxId?: string; skills?: string[] },
     ): Promise<BackgroundStartResult> {
       if (!deps.backgroundBroker) throw new Error(BACKGROUND_UNAVAILABLE_MESSAGE);
       let handle: SandboxHandle;
@@ -1139,9 +1146,8 @@ export function createToolContext(deps: ToolContextDeps): ToolContext {
       if (decision === "require_approval" && !deps.authorizeCommand(command, approvalKey)) {
         throw new NeedsApproval(command, reason ?? "requires approval", "approval", matched, approvalKey);
       }
-      if (deps.ensureSkillTree) {
-        for (const skillDir of skillTreeDirsInCommand(command)) await deps.ensureSkillTree(skillDir, opts?.sandboxId);
-      }
+      if (opts?.skills?.length && !deps.prepareSkillAssets) throw new Error("skill assets are unavailable");
+      await deps.prepareSkillAssets?.(handle, opts?.skills ?? []);
       return once(
         () =>
           deps.backgroundBroker!.start(

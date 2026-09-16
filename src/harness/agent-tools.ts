@@ -540,6 +540,12 @@ export function createAgentTools(ref: ToolContextRef, opts?: AgentToolsOptions):
 
   const executeBaseParams = {
     command: Type.String({ description: "The shell command to run." }),
+    skills: Type.Optional(
+      Type.Array(Type.String({ minLength: 1 }), {
+        description:
+          "Visible skill names whose scripts, templates, or assets this command needs. Read their SKILL.md first. Stages assets on the selected sandbox; paths in commands do not install dependencies.",
+      }),
+    ),
     sandbox_id: Type.Optional(
       Type.String({
         minLength: 1,
@@ -605,6 +611,7 @@ export function createAgentTools(ref: ToolContextRef, opts?: AgentToolsOptions):
       timeout_seconds?: number;
       purpose?: string;
       credentials?: string[];
+      skills?: string[];
     },
     route?: { scratch?: boolean; ownerAuth?: boolean; reachTarget?: string },
   ) => {
@@ -623,6 +630,7 @@ export function createAgentTools(ref: ToolContextRef, opts?: AgentToolsOptions):
     await recordCall(callId, {
       tool: "execute",
       command: params.command,
+      ...(params.skills !== undefined ? { skills: params.skills } : {}),
       ...scopeNote,
       ...(params.sandbox_id ? { sandbox_id: params.sandbox_id } : {}),
     });
@@ -635,6 +643,7 @@ export function createAgentTools(ref: ToolContextRef, opts?: AgentToolsOptions):
         ...(route?.ownerAuth ? { ownerAuth: true } : {}),
         ...(route?.reachTarget !== undefined ? { reachTarget: route.reachTarget } : {}),
         ...(params.credentials?.length ? { credentials: params.credentials } : {}),
+        ...(params.skills !== undefined ? { skills: params.skills } : {}),
         ...(ref.abortSignal ? { signal: ref.abortSignal } : {}),
       };
       const r = await tc.execute(params.command, Object.keys(execOpts).length ? execOpts : undefined);
@@ -697,7 +706,7 @@ export function createAgentTools(ref: ToolContextRef, opts?: AgentToolsOptions):
     "Run a shell command and return its stdout/stderr/exit code. Pick where it runs with `scope`:\n" +
     '- "scoped" (DEFAULT): this conversation\'s sandbox — its workspace files, turn-private inbox paths, shared-file handles, cached logins, and $AGENT_API_* tokens; working state is retained within provider recovery limits; publish durable code to git and artifacts to Files.\n' +
     (scratchExec
-      ? '- "scratch": a blank, instant box. Same OS/runtimes/CLIs, shared org files & skills at ./global (read-only), firewalled network — but NO logins, NO credentials or capability tokens, and NOTHING persists past this turn. Prefer it for heavy self-contained work (crunching fetched material, throwaway experiments, parallel or disk-hungry runs needing no workspace files) — it keeps the sandbox responsive; if the run needs logins, workspace files, or its writes must survive, use scope:"scoped".\n'
+      ? '- "scratch": a blank, instant box. Same OS/runtimes/CLIs, shared org files at ./global (read-only), explicitly requested skill assets at ./skills, firewalled network — but NO logins, NO credentials or capability tokens, and NOTHING persists past this turn. Prefer it for heavy self-contained work (crunching fetched material, throwaway experiments, parallel or disk-hungry runs needing no workspace files) — it keeps the sandbox responsive; if the run needs logins, workspace files, or its writes must survive, use scope:"scoped".\n'
       : "") +
     (ownerAuthExec
       ? "- \"owner\": available only to owner-authorized shared automation; this invocation-only auth box has org-global files plus the owner's credentials, no room workspace or $AGENT_API_* tokens, and is destroyed after the turn. Use for commands that need the owner's login without putting it on the shared computer.\n"
@@ -716,7 +725,7 @@ export function createAgentTools(ref: ToolContextRef, opts?: AgentToolsOptions):
       ? '- "owner": available only to owner-authorized shared automation; this invocation-only auth box has org-global files plus the owner\'s credentials, no shared workspace or $AGENT_API_* tokens, and is destroyed after the turn. Use it for owner-authenticated work in shared automation.\n'
       : "") +
     (scratchExec
-      ? '- "scratch": a blank, instant box. Same OS/runtimes/CLIs, shared org files & skills at ./global (read-only), firewalled network — but NO logins, NO credentials or capability tokens ($AGENT_API_TOKEN etc. are absent), and NOTHING persists past this turn. Prefer it for heavy self-contained work — crunching or analyzing material you can fetch onto it, throwaway experiments, checks against public code, anything parallel or disk-hungry whose only product is the answer — because it keeps this conversation\'s computer responsive for everything else. Work on THIS conversation\'s workspace (its checkouts, uncommitted changes) and anything needing logins stays scoped; if a scratch run turns out to need those, re-run it with scope:"scoped".\n'
+      ? '- "scratch": a blank, instant box. Same OS/runtimes/CLIs, shared org files at ./global (read-only), explicitly requested skill assets at ./skills, firewalled network — but NO logins, NO credentials or capability tokens ($AGENT_API_TOKEN etc. are absent), and NOTHING persists past this turn. Prefer it for heavy self-contained work — crunching or analyzing material you can fetch onto it, throwaway experiments, checks against public code, anything parallel or disk-hungry whose only product is the answer — because it keeps this conversation\'s computer responsive for everything else. Work on THIS conversation\'s workspace (its checkouts, uncommitted changes) and anything needing logins stays scoped; if a scratch run turns out to need those, re-run it with scope:"scoped".\n'
       : "") +
     "`durable` defaults to true on scoped and false on invocation-only boxes; scoped cannot discard writes, and invocation-only boxes cannot be made durable.\n" +
     FILE_SEND_GUIDANCE +
@@ -736,6 +745,7 @@ export function createAgentTools(ref: ToolContextRef, opts?: AgentToolsOptions):
       scope?: string;
       durable?: boolean;
       credentials?: string[];
+      skills?: string[];
     },
   ) => {
     const scope = (params.scope ?? "scoped").trim();
@@ -1391,6 +1401,7 @@ export function createAgentTools(ref: ToolContextRef, opts?: AgentToolsOptions):
         Type.String({ description: "Brief intent for a process operation that may require approval." }),
       ),
       command: Type.Optional(Type.String({ description: "start only: the shell command to run in the background." })),
+      skills: executeBaseParams.skills,
       process_id: Type.Optional(Type.String({ description: "poll/write/stop/watch only: the id start returned." })),
       data: Type.Optional(
         Type.String({
@@ -1455,6 +1466,7 @@ export function createAgentTools(ref: ToolContextRef, opts?: AgentToolsOptions):
         tool: "background",
         action: params.action,
         command: params.command,
+        ...(params.skills !== undefined ? { skills: params.skills } : {}),
         process_id: params.process_id,
         ...(params.sandbox_id ? { sandbox_id: params.sandbox_id } : {}),
         ...(params.monitor_id ? { monitor_id: params.monitor_id } : {}),
@@ -1471,6 +1483,7 @@ export function createAgentTools(ref: ToolContextRef, opts?: AgentToolsOptions):
               );
             const r = await tc.backgroundStart(params.command, {
               ...(params.timeout_seconds ? { ttlSeconds: params.timeout_seconds } : {}),
+              ...(params.skills !== undefined ? { skills: params.skills } : {}),
               ...(params.sandbox_id ? { sandboxId: params.sandbox_id } : {}),
             });
             return recordResult(
@@ -1749,7 +1762,7 @@ export function createAgentTools(ref: ToolContextRef, opts?: AgentToolsOptions):
     set_default: ["sandbox_id"],
     retire: ["sandbox_id"],
     exec: Object.keys(schemas(execute)),
-    start_process: ["command", "sandbox_id", "timeout_seconds"],
+    start_process: ["command", "sandbox_id", "timeout_seconds", "skills"],
     read_process: ["process_id", "since_cursor", "wait_seconds", "max_bytes"],
     write_stdin: ["process_id", "data"],
     signal_process: ["process_id", "signal"],

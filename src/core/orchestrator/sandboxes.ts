@@ -10,7 +10,7 @@ import {
 import type { DeviceFlowCutoverMode } from "../../credentials/device-flow-cutover.ts";
 import { expandServiceAliases } from "../../credentials/resident-paths.ts";
 import { shq } from "../../util/shell.ts";
-import { createSkillMaterializer, safeSkillDirName } from "../../skills/materialize.ts";
+import { createSkillMaterializer, safeSkillDirName, skillInstructions } from "../../skills/materialize.ts";
 import type { SkillResolution } from "../../skills/skill-store.ts";
 import { TURN_FILES_DIR } from "../attachments.ts";
 import { errMessage, swallow, swallowAs } from "../../util/errors.ts";
@@ -300,31 +300,22 @@ export function createTurnSandboxes(ctx: TurnSandboxContext) {
     box.handle = handle;
     return handle;
   };
-  const laidTrees = new Set<string>();
-  const visibleSkillByDir = new Map<string, SkillResolution>();
-  for (const r of visibleSkills) {
-    if (r.skill) visibleSkillByDir.set(safeSkillDirName(r.skill.manifest.name), r);
-  }
-  const ensureSkillTree = async (skillDir: string, sandboxId?: string): Promise<void> => {
-    const treeKey = `${sandboxId ?? "default"}:${skillDir}`;
-    if (laidTrees.has(treeKey)) return;
-    const r = visibleSkillByDir.get(skillDir);
-    if (!r) return;
+  const readSkill = async (name: string) => {
+    safeSkillDirName(name);
+    const resolved = (await visibleSkillsForTurn()).find((entry) => entry.skill?.manifest.name === name);
+    if (!resolved?.skill) return { content: null, sourceScopeId: null };
+    await deps.skills?.recordUse(resolved.skill.id).catch((e) => swallow("orchestrator: skill recordUse", e));
+    return { content: skillInstructions(resolved), sourceScopeId: resolved.skill.scopeId };
+  };
+  const prepareSkillAssets = async (handle: SandboxHandle, names: string[]): Promise<void> => {
     const start = Date.now();
     try {
-      const handle = sandboxId ? await provisionResource(sandboxId) : await provision();
-      await skillMaterializer.materializeTree(deps.sandbox, handle, r, [], async () => {
-        const latest = (await visibleSkillsForTurn()).find(
-          (candidate) => candidate.skill && safeSkillDirName(candidate.skill.manifest.name) === skillDir,
-        );
-        if (!latest) return null;
+      await skillMaterializer.stage(deps.sandbox, handle, names, visibleSkillsForTurn, async (resolved) => {
         const bundles =
-          latest.screenedBundles ?? (deps.skillBundles ? await loadActiveBundles(deps.skillBundles, [latest]) : []);
-        return { resolution: latest, bundles };
+          resolved.screenedBundles ?? (deps.skillBundles ? await loadActiveBundles(deps.skillBundles, [resolved]) : []);
+        await deps.skills?.recordUse(resolved.skill!.id).catch((e) => swallow("orchestrator: skill recordUse", e));
+        return bundles;
       });
-      laidTrees.add(treeKey);
-      if (r.skill && deps.skills)
-        void deps.skills.recordUse(r.skill.id).catch((e) => swallow("orchestrator: skill recordUse", e));
     } catch (err) {
       deps.errors?.record({
         category: "skills",
@@ -333,6 +324,7 @@ export function createTurnSandboxes(ctx: TurnSandboxContext) {
         scopeLabel: scopeId,
         sessionId: session.id,
       });
+      throw err;
     } finally {
       emitGapWork("skills_materialize", start, Date.now());
     }
@@ -633,7 +625,8 @@ export function createTurnSandboxes(ctx: TurnSandboxContext) {
     provisionScratch,
     provisionResource,
     provisionOwnerAuth,
-    ensureSkillTree,
+    readSkill,
+    prepareSkillAssets,
     provisionForReach,
     reclaimBox,
     provisionPending: () => provisionInFlight !== null,
@@ -644,7 +637,6 @@ export function createTurnSandboxes(ctx: TurnSandboxContext) {
       box.handle = null;
       box.pending = null;
       provisionInFlight = null;
-      laidTrees.clear();
     },
   };
 }
