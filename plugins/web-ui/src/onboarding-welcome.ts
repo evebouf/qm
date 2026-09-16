@@ -109,7 +109,11 @@ export class OnboardingWelcome extends LitElement {
       const clean = new URL(location.href);
       for (const key of ["connectionReturn", "status", "error", "connectedAccountId"]) clean.searchParams.delete(key);
       history.replaceState(history.state, "", clean);
-    } else if (!this.setupOnly && this.animateWelcome && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    } else if (
+      !this.setupOnly &&
+      this.animateWelcome &&
+      globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches === false
+    ) {
       this.classList.add("welcome-rolling");
     }
     if (this.widget !== "slack") void this.loadCatalog();
@@ -257,15 +261,15 @@ export class OnboardingWelcome extends LitElement {
                       <span class="welcome-cohort-label">Welcome to ${cohort}!</span
                       ><span class="welcome-champagne" aria-hidden="true">🥂</span>
                       ${Array.from({ length: 18 }, (_, i) => {
-                const side = i % 2 ? 1 : -1;
-                const distance = 35 + ((i * 37) % 85);
-                const turn = side * (80 + ((i * 47) % 190));
-                return html`<span
-                  aria-hidden="true"
-                  class="welcome-flutter"
-                  style=${`--flutter-color:${["#f26522", "#f5ad56", "#d5bb88", "#e8c899"][i % 4]};--flutter-delay:${1750 + (i % 6) * 65}ms;--flutter-mid:${side * distance * 0.7}px;--flutter-x:${side * distance}px;--flutter-peak:${-28 - ((i * 19) % 36)}px;--flutter-end:${15 + ((i * 11) % 20)}px;--flutter-turn:${turn}deg;--flutter-turn-end:${turn * 2}deg`}
-                ></span>`;
-              })}
+                        const side = i % 2 ? 1 : -1;
+                        const distance = 35 + ((i * 37) % 85);
+                        const turn = side * (80 + ((i * 47) % 190));
+                        return html`<span
+                          aria-hidden="true"
+                          class="welcome-flutter"
+                          style=${`--flutter-color:${["#f26522", "#f5ad56", "#d5bb88", "#e8c899"][i % 4]};--flutter-delay:${1750 + (i % 6) * 65}ms;--flutter-mid:${side * distance * 0.7}px;--flutter-x:${side * distance}px;--flutter-peak:${-28 - ((i * 19) % 36)}px;--flutter-end:${15 + ((i * 11) % 20)}px;--flutter-turn:${turn}deg;--flutter-turn-end:${turn * 2}deg`}
+                        ></span>`;
+                      })}
                     </div>`
                   : nothing
               }
