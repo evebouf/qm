@@ -1337,8 +1337,8 @@ export function createChatSurface(
           <section class="chat-scroll">
             ${pinnedStrip()}
             <div class="message-stack ${emptyChat ? "empty-stack" : ""}">
-              ${showWelcome ? welcomeGreeting(!messages.length) : nothing}
-              ${inheritedHeader()} ${chatState.earlierCount > 0 ? earlierNotice(agent) : nothing} ${messageContent}
+              ${showWelcome ? welcomeGreeting(!messages.length) : nothing} ${inheritedHeader()}
+              ${chatState.earlierCount > 0 ? earlierNotice(agent) : nothing} ${messageContent}
               ${emptyChat && !isNewUser ? html`<h1 class="chat-cta">${chatCta()}</h1>` : nothing}
               ${showStateError(messages, agent.state.errorMessage) ? html`<div class="composer-error inline">${agent.state.errorMessage}</div>` : nothing}
             </div>
@@ -1762,14 +1762,16 @@ export function createChatSurface(
       if (chunk.type === "text") {
         for (const part of setupContent(assistantDisplayText(chunk.text))) {
           if (part.type !== "text") {
-            parts.push(html`<qm-onboarding-welcome
-              .me=${appState.me}
-              .base=${withBase("")}
-              .adminBase=${ADMIN_BASE}
-              .widget=${part.type === "slack" ? "slack" : "apps"}
-              .setupOnly=${true}
-              .animateWelcome=${false}
-            ></qm-onboarding-welcome>`);
+            parts.push(
+              html`<qm-onboarding-welcome
+                .me=${appState.me}
+                .base=${withBase("")}
+                .adminBase=${ADMIN_BASE}
+                .widget=${part.type === "slack" ? "slack" : "apps"}
+                .setupOnly=${true}
+                .animateWelcome=${false}
+              ></qm-onboarding-welcome>`,
+            );
             continue;
           }
           const shown = part.text;

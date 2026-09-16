@@ -4482,16 +4482,13 @@ a.chat-row-open {
   background: color-mix(in srgb, var(--secondary) 45%, var(--background));
   color: var(--foreground);
   text-decoration: none;
-  box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
   transition:
     border-color 140ms ease,
-    background 140ms ease,
-    box-shadow 140ms ease;
+    background 140ms ease;
 }
 a.connector-widget:hover {
   border-color: color-mix(in srgb, var(--muted-foreground) 45%, var(--border));
   background: var(--secondary);
-  box-shadow: 0 2px 6px rgb(0 0 0 / 6%);
 }
 a.connector-widget:focus-visible {
   outline: 2px solid var(--foreground);

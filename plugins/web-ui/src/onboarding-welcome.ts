@@ -252,11 +252,11 @@ export class OnboardingWelcome extends LitElement {
           ? nothing
           : html`<h1 class="welcome-beat" style="--welcome-delay:0ms">${name ? `Hi, ${name}.` : "Hi there."}</h1>
               ${
-        cohort
-          ? html`<div class="welcome-cohort welcome-beat" style="--welcome-delay:700ms">
-              <span class="welcome-cohort-label">Welcome to ${cohort}!</span
-              ><span class="welcome-champagne" aria-hidden="true">🥂</span>
-              ${Array.from({ length: 18 }, (_, i) => {
+                cohort
+                  ? html`<div class="welcome-cohort welcome-beat" style="--welcome-delay:700ms">
+                      <span class="welcome-cohort-label">Welcome to ${cohort}!</span
+                      ><span class="welcome-champagne" aria-hidden="true">🥂</span>
+                      ${Array.from({ length: 18 }, (_, i) => {
                 const side = i % 2 ? 1 : -1;
                 const distance = 35 + ((i * 37) % 85);
                 const turn = side * (80 + ((i * 47) % 190));
@@ -266,9 +266,9 @@ export class OnboardingWelcome extends LitElement {
                   style=${`--flutter-color:${["#f26522", "#f5ad56", "#d5bb88", "#e8c899"][i % 4]};--flutter-delay:${1750 + (i % 6) * 65}ms;--flutter-mid:${side * distance * 0.7}px;--flutter-x:${side * distance}px;--flutter-peak:${-28 - ((i * 19) % 36)}px;--flutter-end:${15 + ((i * 11) % 20)}px;--flutter-turn:${turn}deg;--flutter-turn-end:${turn * 2}deg`}
                 ></span>`;
               })}
-            </div>`
-          : nothing
-      }
+                    </div>`
+                  : nothing
+              }
               <p class="welcome-beat" style=${`--welcome-delay:${cohort ? 2400 : 400}ms`}>
                 ${cohort ? "And welcome" : "Welcome"} to QM, ${cohort ? "YC’s" : "your"} agent harness. Use it to
                 research customers, build tools, and automate the everyday work of running
@@ -299,35 +299,35 @@ export class OnboardingWelcome extends LitElement {
           : html`<div class="welcome-beat" style=${`--welcome-delay:${cohort ? 3300 : 1100}ms`}>
               ${this.loading ? html`<div class="welcome-load" role="status">Loading your available apps…</div>` : nothing}
               ${
-          this.error
-            ? html`<div class="welcome-load">
-                <p role="status">${this.error}</p>
-                <button type="button" class="btn" @click=${() => void this.loadCatalog()}>Try again</button>
-              </div>`
-            : nothing
-        }
+                this.error
+                  ? html`<div class="welcome-load">
+                      <p role="status">${this.error}</p>
+                      <button type="button" class="btn" @click=${() => void this.loadCatalog()}>Try again</button>
+                    </div>`
+                  : nothing
+              }
               ${
-          this.connectionOutcome && this.connectionOutcome !== "success"
-            ? html`<div
-                class="connection-result"
-                data-outcome=${this.connectionOutcome}
-                role="status"
-                aria-live="polite"
-              >
-                <strong>${outcome.title}</strong>
-                ${outcome.detail ? html`<p>${outcome.detail}</p>` : nothing}
-                ${["cancelled", "failed"].includes(this.connectionOutcome) && this.retryService ? html`<button class="btn" @click=${() => this.authorize({ ...this.retryService!, description: "", popularity: 0 })}>Try again</button>` : nothing}
-              </div>`
-            : nothing
-        }
+                this.connectionOutcome && this.connectionOutcome !== "success"
+                  ? html`<div
+                      class="connection-result"
+                      data-outcome=${this.connectionOutcome}
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <strong>${outcome.title}</strong>
+                      ${outcome.detail ? html`<p>${outcome.detail}</p>` : nothing}
+                      ${["cancelled", "failed"].includes(this.connectionOutcome) && this.retryService ? html`<button class="btn" @click=${() => this.authorize({ ...this.retryService!, description: "", popularity: 0 })}>Try again</button>` : nothing}
+                    </div>`
+                  : nothing
+              }
               <div class="welcome-picker" ?inert=${Boolean(this.authorizing)}></div>
               ${
-          connectedServices.length
-            ? html`<div class="connection-connected" role="status" aria-live="polite">
-                ${connectedServices.map((service) => html`<span>${icon(Check, 10)}${service.name} connected</span>`)}
-              </div>`
-            : nothing
-        }
+                connectedServices.length
+                  ? html`<div class="connection-connected" role="status" aria-live="polite">
+                      ${connectedServices.map((service) => html`<span>${icon(Check, 10)}${service.name} connected</span>`)}
+                    </div>`
+                  : nothing
+              }
               ${this.authorizing ? html`<p class="welcome-connection-status" role="status">Opening ${this.authorizing}…</p>` : nothing}
               ${this.authorizationError ? html`<p class="welcome-connection-status" role="alert">${this.authorizationError}</p>` : nothing}
             </div>`

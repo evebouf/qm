@@ -23,6 +23,17 @@ const onPath = (m: string, p: string) => (method: string, pathname: string) => m
 
 const FAMILIES: AgentApiFamily[] = [
   {
+    match: onPath("GET", "/v1/composio/identity"),
+    routes: [
+      {
+        method: "GET",
+        path: "/v1/composio/identity",
+        summary:
+          "read your stable Composio userId used by the web app picker; this selects accounts and does not grant access to them",
+      },
+    ],
+  },
+  {
     match: (method, path) => path === "/v1/swarm" && (method === "GET" || method === "POST"),
     guidance:
       "Swarm workers are ordinary sessions with private blank computers. Inspect peers and their context, then send to chosen IDs or all; shared history is visible to every member. Notifications queue unattended turns. An optional forumSandboxId names an existing shared computer, selected explicitly per command with execute's sandbox_id.",
