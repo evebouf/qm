@@ -146,31 +146,37 @@ export function createPostgresRunStore(connectionString: string, opts?: { maxCla
     ],
   );
 
-  const availabilityListeners = new Set<() => void>();
+  const availabilityListeners = new Map<() => void, number>();
   let availabilityTimer: ReturnType<typeof setTimeout> | undefined;
   let availabilityProbe: Promise<void> | null = null;
   let availabilityClosed = false;
 
   function watchAvailability(): void {
     if (availabilityClosed || availabilityListeners.size === 0 || availabilityTimer || availabilityProbe) return;
-    availabilityTimer = setTimeout(() => {
-      availabilityTimer = undefined;
-      availabilityProbe = q(
-        `SELECT EXISTS (
+    availabilityTimer = setTimeout(
+      () => {
+        availabilityTimer = undefined;
+        availabilityProbe = q(
+          `SELECT EXISTS (
           SELECT 1 FROM runs r WHERE r.status='pending' AND r.retry_after <= $1
           AND NOT EXISTS (
             SELECT 1 FROM runs blocked WHERE blocked.session_id=r.session_id
               AND (blocked.status='running' OR (blocked.status='pending' AND blocked.retry_after > $1))
           )
         ) AS available`,
-        [Date.now()],
-      ).then(({ rows }) => {
-        if (rows[0]?.available) for (const listener of availabilityListeners) listener();
-      }).catch((error: unknown) => swallow("run availability probe", error)).finally(() => {
-        availabilityProbe = null;
-        watchAvailability();
-      });
-    }, 250);
+          [Date.now()],
+        )
+          .then(({ rows }) => {
+            if (rows[0]?.available) for (const listener of availabilityListeners.keys()) listener();
+          })
+          .catch((error: unknown) => swallow("run availability probe", error))
+          .finally(() => {
+            availabilityProbe = null;
+            watchAvailability();
+          });
+      },
+      Math.min(...availabilityListeners.values()),
+    );
     availabilityTimer.unref();
   }
 
@@ -220,7 +226,9 @@ export function createPostgresRunStore(connectionString: string, opts?: { maxCla
 
   const runs: RunStore = {
     subscribeAvailable(listener, options) {
-      availabilityListeners.add(listener);
+      availabilityListeners.set(listener, options?.pollMs ?? 50);
+      clearTimeout(availabilityTimer);
+      availabilityTimer = undefined;
       const off = available.subscribe(listener, options);
       watchAvailability();
       return () => {

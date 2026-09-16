@@ -202,6 +202,7 @@ export function createWorker(deps: WorkerDeps): Worker {
       if (loopDone) return;
       stopped = false;
       unsubscribe = deps.runs.subscribeAvailable?.(notify, {
+        pollMs,
         onResync: notify,
       });
       loopDone = loop();

@@ -93,7 +93,7 @@ for (const duringClaim of [false, true]) {
   });
 }
 
-test("missed notifications recover, disconnect restores fast polling, reconnect checks immediately", async () => {
+test("missed notifications recover and reconnect checks immediately", async () => {
   const { runs } = createMemoryRunStore();
   const bus = createMemoryEventBus<null>("availability test");
   runs.subscribeAvailable = (listener, options) => {
@@ -117,9 +117,6 @@ test("missed notifications recover, disconnect restores fast polling, reconnect 
   worker.start();
   try {
     await until(() => claims >= 2);
-    bus.disconnect();
-    const disconnectedClaims = claims;
-    await until(() => claims >= disconnectedClaims + 4);
     bus.resync();
     const reconnectClaims = claims;
     await until(() => claims > reconnectClaims);
@@ -140,10 +137,9 @@ test(
     const reader = createPostgresRunStore(url);
     let notifications = 0;
     let resyncs = 0;
-    let disconnects = 0;
     const off = reader.runs.subscribeAvailable!(() => notifications++, {
+      pollMs: 60_000,
       onResync: () => resyncs++,
-      onDisconnect: () => disconnects++,
     });
     const ids: string[] = [];
     try {
@@ -189,7 +185,6 @@ test(
         "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=current_database() AND query='LISTEN qm_run_available' AND application_name=$1",
         [new URL(url).searchParams.get("application_name")],
       );
-      await until(() => disconnects > 0);
       ids.push((await writer.runs.enqueue({ sessionId, request })).run.id);
       await until(() => resyncs === 2);
       await enqueue();
@@ -232,7 +227,7 @@ test(
           },
         } as unknown as Orchestrator,
         leaseTtlMs: 5_000,
-        pollMs: 250,
+        pollMs: 60_000,
       }),
     );
     try {
@@ -263,6 +258,65 @@ test(
       await Promise.all(workers.map((worker) => worker.stop()));
       await reader.close();
       await writer.close();
+      await cleanup();
+    }
+  },
+);
+
+test(
+  "shared watchdog preserves retry deadlines and catches missing notifications",
+  { skip: !process.env.DATABASE_URL },
+  async () => {
+    const { url, cleanup } = await isolatedPostgres();
+    const writer = createPostgresRunStore(url);
+    const reader = createPostgresRunStore(url);
+    const direct = new pg.Pool({ connectionString: url });
+    const observed: Array<{ id: string; at: number }> = [];
+    const workers = Array.from({ length: 16 }, () =>
+      createWorker({
+        runs: reader.runs,
+        sessions: createMemorySessionStore(),
+        orchestrator: {
+          handleTurn: async (input: OrchestratorInput) => {
+            observed.push({ id: input.text, at: Date.now() });
+            return { status: "ok", sessionId: "scheduled" };
+          },
+        } as unknown as Orchestrator,
+        leaseTtlMs: 5_000,
+        pollMs: 250,
+      }),
+    );
+    try {
+      const first = (await writer.runs.enqueue({ sessionId: "scheduled", request: { ...request, text: "first" } })).run;
+      const claimed = await writer.runs.claimById(first.id, "setup", 5_000);
+      await writer.runs.fail(first.id, claimed!.leaseToken!, "transient", { retryAfterMs: 500 });
+      const { rows } = await direct.query("SELECT retry_after FROM runs WHERE id=$1", [first.id]);
+      const deadline = Number(rows[0].retry_after);
+      await writer.runs.enqueue({ sessionId: "scheduled", request: { ...request, text: "second" } });
+      for (const worker of workers) worker.start();
+      await until(() => observed.length === 2);
+      assert.deepEqual(
+        observed.map(({ id }) => id),
+        ["first", "second"],
+      );
+      assert.ok(observed[0]!.at >= deadline, "retry never claims before its deadline");
+      assert.ok(
+        observed[0]!.at - deadline < 750,
+        "deadline pickup uses the watchdog, not five-second recovery polling",
+      );
+      const insertedAt = Date.now();
+      await direct.query(
+        "INSERT INTO runs(id, session_id, status, request, created_at) VALUES($1,$2,'pending',$3,$4)",
+        [randomUUID(), "missed", JSON.stringify({ ...request, text: "missed" }), insertedAt],
+      );
+      await until(() => observed.length === 3);
+      assert.equal(observed[2]!.id, "missed");
+      assert.ok(observed[2]!.at - insertedAt < 750, "missing NOTIFY retains the original polling cadence");
+    } finally {
+      await Promise.all(workers.map((worker) => worker.stop()));
+      await reader.close();
+      await writer.close();
+      await direct.end();
       await cleanup();
     }
   },
