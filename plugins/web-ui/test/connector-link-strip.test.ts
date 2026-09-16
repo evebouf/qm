@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
 
 import { connectorLinksIn, stripConnectorLinks } from "../src/connector-link.ts";
 
@@ -160,4 +161,37 @@ test("Slack bot setup uses one same-origin checklist, not a personal connection 
   assert.deepEqual(connectorLinksIn(text, "https://other.example.com"), []);
   assert.deepEqual(connectorLinksIn(text), []);
   assert.deepEqual(connectorLinksIn(url + "&company=other", "https://agent.example.com"), []);
+});
+
+test("onboarding's documented link layout becomes four labeled chips with no leftover list", () => {
+  const skill = readFileSync(
+    new globalThis.URL("../../onboarding/skills/onboarding/SKILL.md", import.meta.url),
+    "utf8",
+  );
+  const template = skill.match(/```markdown\n([\s\S]*?)\n```/)?.[1];
+  assert.ok(template);
+  const text = template.replace(
+    /(GMAIL|DRIVE|CALENDAR|SLACK)_URL/g,
+    (_, app: string) => `https://connect.composio.dev/link/lk_test_${app.toLowerCase()}`,
+  );
+  const intro = "Connect any of these accounts, or skip for now.";
+  const links = connectorLinksIn(`${intro}\n\n${text}`, "https://agent.example.com");
+  assert.deepEqual(
+    links.map((link) => link.label),
+    ["Connect Gmail", "Connect Google Drive", "Connect Google Calendar", "Connect Slack"],
+  );
+  assert.equal(stripConnectorLinks(`${intro}\n\n${text}`, links), intro);
+});
+
+test("bundled Google and Slack links leave no duplicate Google chips or orphan labels", () => {
+  const text = `Connect Google Workspace for Gmail, Drive, and Calendar, plus Slack. Or skip.\n\n[Connect Google Workspace](${URL})\n\n[Connect Slack](https://agent.example.com/connect/redeem/slack123?p=slack)`;
+  const links = connectorLinksIn(text, "https://agent.example.com");
+  assert.deepEqual(
+    links.map((link) => link.provider),
+    ["google", "slack"],
+  );
+  assert.equal(
+    stripConnectorLinks(text, links),
+    "Connect Google Workspace for Gmail, Drive, and Calendar, plus Slack. Or skip.",
+  );
 });

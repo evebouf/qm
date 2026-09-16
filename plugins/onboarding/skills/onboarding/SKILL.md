@@ -36,7 +36,7 @@ Memory is not a file; never edit it with shell commands.
 
 ## 1. Connect accounts
 
-Use the selected access skill to connect the apps the user chooses. The direct OAuth flow below is for the direct connector. Do not request new project keys from regular users or change credential grants during onboarding.
+Proactively offer Gmail, Google Drive, Google Calendar, and Slack in the first response, including the automatic greeting. These are optional starting points, not four required connections. Do not ask which apps they use before preparing the available links. Use the selected access skill; the direct OAuth flow below is for the direct connector. Do not request new project keys from regular users or change credential grants during onboarding.
 
 The surface already authenticated the user. Greet them by name; do not ask their name or
 role, and do not research them in the opening turn. Explain that connecting lets you act as
@@ -76,7 +76,8 @@ form, never into chat.
 
 Check the live credential inventory first. When an authorized Composio credential is available,
 read `skills/composio/SKILL.md`, discover available apps, and use its consent flow for the
-user's choices. Reuse their connected accounts after checking identity and permissions;
+starter apps above, or the user's explicit choices instead. Prepare links for missing accounts
+in the same turn; do not wait for them to name each app. Reuse their connected accounts after checking identity and permissions;
 a project key is not proof that a personal account is connected. Do not ask them to
 create OAuth apps for connections this source already provides. Do not infer that Composio is unavailable from an empty direct OAuth list
 or a native provider-not-configured error. Explicit app restrictions and account permissions
@@ -87,8 +88,9 @@ configured by the admin. Offer direct OAuth links only for that list. If it is e
 no other authorized access path is available, skip account connection without advertising
 unsupported apps. Do not turn onboarding into provider configuration: do not ask for
 a Composio project key, new OAuth apps, or per-app auth configs just because access
-is missing. Continue with useful work; help configure a new source only if they ask. Otherwise ask which available services they use and present the returned
-`connectUrl` values together:
+is missing. Continue with useful work; help configure a new source only if they ask. For the available starter apps, present the returned
+`connectUrl` values together. The direct Google connector covers Gmail, Drive, and Calendar
+with one Google Workspace link; do not mint three duplicate Google links:
 
 ```bash
 curl -sS -X POST "$AGENT_API_URL/v1/connectors/oauth/consent/mint" \
@@ -100,6 +102,39 @@ curl -sS -X POST "$AGENT_API_URL/v1/connectors/oauth/consent/mint" \
 Never construct the URL yourself. Omit providers that return `oauth_not_configured`. The
 user must tap the links; continue after asking them to approve the services they use.
 Mention a machine-local login only when the live Your logins block lists it.
+
+### Present the connection links
+
+Keep the offer short: one sentence naming the available apps and saying they can connect
+any or skip. Present all prepared links together in that response, not one per turn.
+Use the selected access skill's link-formatting instructions: the web UI extracts the
+links into connection chips beneath the message, so put explanatory prose before the
+links and keep the links at the end. Do not refer to buttons unless links were actually
+returned. Omit unavailable or declined apps. Reuse already connected accounts unless
+the user requests another account or reconnection; do not let one failed link prevent
+offering the others. A personal Slack link is not an **Add QM to Slack**
+bot-install link.
+
+For separate consent links, use these labels and layout (replace each placeholder with
+the exact returned URL; never send placeholders or the code fence):
+
+```markdown
+[Connect Gmail](GMAIL_URL)
+
+[Connect Google Drive](DRIVE_URL)
+
+[Connect Google Calendar](CALENDAR_URL)
+
+[Connect Slack](SLACK_URL)
+```
+
+When Google consent is bundled, replace the three Google links with
+`[Connect Google Workspace](GOOGLE_URL)` and explain that it covers Gmail, Drive, and
+Calendar. If the user declines part of a bundled connection, explain its full coverage
+and let them choose or defer; never imply the declined app was excluded.
+Link preparation is only an invitation: the user chooses accounts and grants
+consent in the browser. Do not open or approve consent for them, claim a connection
+succeeded without checking, or inspect their app content in the greeting.
 
 ## Voice
 
