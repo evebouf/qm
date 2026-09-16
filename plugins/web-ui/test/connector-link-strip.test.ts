@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { connectorLinksIn, stripConnectorLinks } from "../src/connector-link.ts";
+import { connectorLinksIn, connectorService, stripConnectorLinks } from "../src/connector-link.ts";
 
 const URL = "https://agent.example.com/connect/redeem/abc123?p=google";
 const LEGACY_URL = "https://agent.example.com/v1/connectors/oauth/consent/redeem/abc123?p=google";
@@ -160,4 +160,28 @@ test("Slack bot setup uses one same-origin checklist, not a personal connection 
   assert.deepEqual(connectorLinksIn(text, "https://other.example.com"), []);
   assert.deepEqual(connectorLinksIn(text), []);
   assert.deepEqual(connectorLinksIn(url + "&company=other", "https://agent.example.com"), []);
+});
+
+test("Composio service logos use recognizable names without changing the destination", () => {
+  for (const [label, service] of [
+    ["Connect Gmail", "gmail"],
+    ["Authorize Google Calendar", "googlecalendar"],
+    ["Connect Calendar", "googlecalendar"],
+    ["Connect Google Drive", "googledrive"],
+    ["Connect Google Sheets", "googlesheets"],
+    ["Connect GitHub", "github"],
+    ["Connect Slack", "slack"],
+    ["Connect Notion", "notion"],
+    ["Authorize Paper Lantern 🌙", ""],
+    ["Connect Outlook Calendar", ""],
+    ["Connect Gmail and Slack", ""],
+    ["Connect linearly", ""],
+  ]) {
+    const [link] = connectorLinksIn(`[${label}](${COMPOSIO_URL})`);
+    assert.equal(connectorService(link!), service, label);
+    assert.equal(link!.url, COMPOSIO_URL);
+    assert.equal(link!.label, label);
+  }
+  assert.equal(connectorService({ provider: "composio", url: COMPOSIO_URL }), "");
+  assert.equal(connectorService({ provider: "github", url: URL, label: "Slack" }), "github");
 });

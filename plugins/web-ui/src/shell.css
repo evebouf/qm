@@ -4470,57 +4470,110 @@ a.chat-row-open {
 
 .connector-widget {
   display: inline-flex;
+  box-sizing: border-box;
   align-items: center;
   gap: 12px;
-  max-width: 360px;
-
+  width: fit-content;
+  max-width: min(100%, 400px);
   margin: 8px 10px 8px 0;
-  padding: 12px 18px;
+  padding: 12px 14px 12px 12px;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--secondary);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--secondary) 45%, var(--background));
   color: var(--foreground);
   text-decoration: none;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 3%);
   transition:
     border-color 140ms ease,
-    background 140ms ease;
+    background 140ms ease,
+    box-shadow 140ms ease;
 }
-.connector-widget:hover {
-  border-color: var(--muted-foreground);
-  background: color-mix(in srgb, var(--secondary) 70%, var(--foreground) 6%);
+a.connector-widget:hover {
+  border-color: color-mix(in srgb, var(--muted-foreground) 45%, var(--border));
+  background: var(--secondary);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 6%);
 }
-
+a.connector-widget:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 3px;
+}
 .connector-widget.connected {
-  cursor: default;
-  border-color: color-mix(in srgb, var(--success) 40%, var(--border));
-  background: color-mix(in srgb, var(--success) 8%, var(--secondary));
+  border-color: color-mix(in srgb, var(--success) 25%, var(--border));
 }
-.connector-widget.connected .connector-widget-icon {
-  color: var(--success);
+.connector-widget .connector-logo {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+  color: var(--foreground);
 }
-.connector-widget-icon {
-  display: inline-flex;
-  flex: 0 0 auto;
-  color: var(--muted-foreground);
+.connector-widget .connector-logo svg {
+  width: 20px;
+  height: 20px;
+}
+.connector-widget [data-service="gmail"],
+.connection-picker [data-service="gmail"] {
+  color: #d4483b;
+}
+.connector-widget [data-service="googlecalendar"],
+.connection-picker [data-service="googlecalendar"] {
+  color: #4285f4;
+}
+.connector-widget [data-service="googledrive"],
+.connection-picker [data-service="googledrive"],
+.connector-widget [data-service="googlesheets"],
+.connection-picker [data-service="googlesheets"] {
+  color: #34a853;
+}
+.connector-widget [data-service="google"],
+.connection-picker [data-service="google"] {
+  color: #4285f4;
+}
+.connector-widget [data-service="slack"],
+.connection-picker [data-service="slack"] {
+  color: #b74685;
+}
+.connector-widget [data-service="linear"],
+.connection-picker [data-service="linear"] {
+  color: #8278ec;
+}
+.connector-widget [data-service="dropbox"],
+.connection-picker [data-service="dropbox"] {
+  color: #3984ff;
 }
 .connector-widget-text {
   display: flex;
   flex-direction: column;
+  gap: 4px;
   min-width: 0;
-  line-height: 1.3;
+  line-height: 1.35;
 }
 .connector-widget-text strong {
   overflow-wrap: anywhere;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 .connector-widget-text small {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted-foreground);
+  overflow-wrap: anywhere;
 }
-.connector-widget .icon:last-child {
+.connector-widget-action,
+.connector-widget-status {
+  display: inline-flex;
+  flex-shrink: 0;
   margin-left: auto;
   color: var(--muted-foreground);
+}
+.connector-widget-status {
+  color: var(--success);
+}
+@media (prefers-reduced-motion: reduce) {
+  .connector-widget {
+    transition: none;
+  }
 }
 .connector-desc {
   margin: 2px 0 0;
@@ -11505,4 +11558,150 @@ h3.ambient-field-label {
 }
 .slack-setup-checklist .connector-widget {
   margin: 8px 0;
+}
+
+.connection-picker {
+  max-width: 480px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px;
+  background: color-mix(in srgb, var(--secondary) 30%, var(--background));
+}
+.connection-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.connection-picker-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.connection-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--background);
+  color: var(--muted-foreground);
+}
+.connection-picker-search:focus-within {
+  outline: 2px solid var(--muted-foreground);
+  outline-offset: 2px;
+}
+.connection-picker-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 12px;
+}
+.connection-picker-caption {
+  margin: 16px 0 8px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.connection-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  max-height: 264px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.connection-picker-app {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--background);
+  color: var(--foreground);
+  text-align: left;
+  cursor: pointer;
+}
+.connection-picker-app:hover:not(:disabled) {
+  background: var(--secondary);
+  border-color: var(--muted-foreground);
+}
+.connection-picker-app:focus-visible,
+.connection-picker-more:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 2px;
+}
+.connection-picker-app .connector-logo {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+}
+.connection-picker-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.connection-picker-trailing {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+.connection-picker-app:disabled {
+  cursor: default;
+}
+.connection-picker-app:disabled .connection-picker-trailing {
+  color: var(--success);
+}
+.connection-picker-more {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  cursor: pointer;
+}
+.connection-picker-more:hover {
+  color: var(--foreground);
+}
+.connection-picker-empty {
+  padding: 18px 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: center;
+}
+@media (max-width: 400px) {
+  .connection-picker {
+    padding: 12px;
+  }
+  .connection-picker-header {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .connection-picker-app {
+    gap: 5px;
+    padding: 8px 5px;
+  }
+}
+
+.connector-logo-remote {
+  position: relative;
+}
+.connector-logo-remote img {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  object-fit: contain;
+  background: var(--background);
 }

@@ -255,3 +255,34 @@ the CSS media queries, the composer, and the split canvas.
 
 This is a **surface plugin**: it carries its own front-end deps (Vite, lit, pi-web-ui) and
 runs as a separate process. The zero-runtime-dep core is untouched.
+
+## Chat connection chips
+
+Chat authorization links share the connector service logos. Composio links use recognized
+service names in their Markdown labels; unknown or ambiguous names keep a generic icon.
+The destination URL and authorization behavior do not depend on the inferred logo.
+Gmail, Google Calendar, Google Drive, and Google Sheets artwork comes from
+[Simple Icons v16.0.0](https://github.com/simple-icons/simple-icons/tree/16.0.0)
+(CC0) and is bundled locally with the existing connector SVG artwork.
+
+## Cohort welcome and app picker
+
+Set `WEB_UI_WELCOME_COHORT=F26` on the web surface to show the cohort welcome in a new user's empty chat. It replaces the automatic first agent turn for that deployment; ordinary chat starts when the user sends a message. The greeting uses the signed-in display name. The welcome remains above the messages in the earliest personal web conversation, including when reopened. It is selected from persisted session creation times. The champagne and soft flutter sequence replays on refresh only before the first message and respects reduced motion.
+
+The picker reads Composio's live catalog in usage order, omits apps that need no authorization, and searches the complete paginated catalog. Known services use local logos; remaining catalog logos use Composio's logo host. Selecting an app submits to the authenticated web surface and opens the provider's authorization link directly. Consent remains on the provider page. The Slack action opens the existing administrator setup page.
+
+The core bridge accepts a verified portal identity and uses either that person's own `COMPOSIO_API_KEY` keychain entry or an enabled org service credential granted to them. Secrets never enter the browser. The agent skill reads `/v1/composio/identity` to use the same organization/person identity as the picker. A company project key retains Composio's existing project-wide access boundary; the identity selects accounts and does not isolate them from other holders of that key.
+
+### Local connection-return preview
+
+Open `http://localhost:8138/?connectionDemo=1` on the local dev instance. This loopback-only UI mode replaces app authorization with a provider simulation offering approval, cancellation, and failure. It makes a full navigation round trip with a callback URL, attempt nonce, status, and connected-account ID. The simulated verifier checks its own record rather than trusting `status=success` in the URL.
+
+Session storage retains the account-scoped attempt for twenty minutes, picker query, expanded state, scroll position, and simulated connections. Returning skips the welcome animation, verifies the simulated result, clears callback parameters, and restores the picker. Reset clears the preview's simulated connections. No provider authorization, tokens, or actual connected accounts are changed by this mode.
+
+This is an interaction prototype, not the production callback implementation. Production must pass Composio's `callback_url`, bind the attempt to the authenticated user and account, and verify account ownership and ACTIVE status with Composio before showing connected. The existing real authorization route still does not provide that callback.
+
+The welcome uses the organization's configured branding `orgName`, falling back to “your company” when it is unavailable.
+
+### Setup widgets in agent replies
+
+In web chat, an assistant reply can include `::connect-apps{}` as a standalone paragraph to render the reusable app picker. The separate `::add-to-slack{}` directive renders the Slack setup action for administrators; include both to show both. It omits the welcome and animation and uses the signed-in viewer’s authorization routes. The Composio skill teaches this response for requests to connect apps or reopen setup. Code blocks, quotations, and inline examples remain ordinary text. The directive persists in the transcript and renders again when reopened. Connected-account status retains the same limitations as the onboarding picker and local return-flow preview.

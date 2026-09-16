@@ -66,3 +66,28 @@ export function stripConnectorLinks(text: string, links = connectorLinksIn(text)
   }
   return text.replace(/[ \t]+$/gm, "").trim();
 }
+
+export function connectorService(link: ConnectorLink): string {
+  if (link.provider !== "composio") return link.provider;
+  const label = (link.label ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  const services: Array<[string, RegExp]> = [
+    ["gmail", /\bgmail\b/],
+    ["googlecalendar", /\b(?:google calendar|gcalendar)\b|^(?:connect |authorize )?calendar$/],
+    ["googledrive", /\b(?:google drive|gdrive)\b/],
+    ["googlesheets", /\b(?:google sheets|gsheets)\b/],
+    ["google", /\b(?:google|google workspace)\b/],
+    ["slack", /\bslack\b/],
+    ["notion", /\bnotion\b/],
+    ["linear", /\blinear\b/],
+    ["github", /\bgithub\b/],
+    ["dropbox", /\bdropbox\b/],
+    ["x", /\b(?:twitter|x)\b/],
+  ];
+  const matches = services.filter(([, pattern]) => pattern.test(label));
+  const hasGoogleProduct = matches.some(([id]) => id.startsWith("google") && id !== "google");
+  const specific = matches.filter(([id]) => id !== "google" || !hasGoogleProduct);
+  return specific.length === 1 ? specific[0]![0] : "";
+}

@@ -1,3 +1,8 @@
+import "./onboarding-welcome";
+import { setupContent } from "./setup-widget";
+import { isWelcomeConversation } from "./welcome-session";
+import { ADMIN_BASE } from "./shell";
+import { connectorCard } from "./connector-widget";
 import { loadGeneratedActivities } from "./generated-activities";
 import { playgroundPath, playgroundsIn, type PlaygroundArtifact } from "./playground";
 import { Agent } from "@earendil-works/pi-agent-core";
@@ -27,7 +32,6 @@ import {
   Pause,
   Pencil,
   Pin,
-  Plug,
   Radar,
   RefreshCw,
   Target,
@@ -96,7 +100,7 @@ import {
   type ToolRowModel,
 } from "./timeline";
 import "./slack-setup";
-import { CONNECTOR_NAMES, connectorLinksIn, stripConnectorLinks, type ConnectorLink } from "./connector-link";
+import { connectorLinksIn, stripConnectorLinks, type ConnectorLink } from "./connector-link";
 import { deepLinkPath, UI_BASE } from "./deep-link";
 import type { ChatSurface, ConvCtx } from "./conv-types";
 import { errMessage, swallow } from "../../chassis/src/errors";
@@ -513,6 +517,7 @@ export function createChatSurface(
     scopeId: string | null,
     messages: ReturnType<typeof entriesToMessages>,
   ): boolean {
+    if (appState.me?.welcomeCohort) return false;
     if (
       !shouldStartProactiveOpener({
         started: proactiveOpenerStarted,
@@ -1099,12 +1104,16 @@ export function createChatSurface(
     consumeBackgroundPanelRequest();
   }
 
-  function welcomeGreeting(): TemplateResult {
+  function welcomeGreeting(animate = true): TemplateResult {
     return html`
       <article class="message-row assistant-row welcome-greeting">
         <div class="assistant-body">
-          <h1>Hi, I'm your AI teammate 👋</h1>
-          <p>Tell me what you're working on, or pick a task below to get started.</p>
+          <qm-onboarding-welcome
+            .me=${appState.me}
+            .animateWelcome=${animate}
+            .base=${withBase("")}
+            .adminBase=${ADMIN_BASE}
+          ></qm-onboarding-welcome>
         </div>
       </article>
     `;
@@ -1292,14 +1301,15 @@ export function createChatSurface(
       : currentMessages;
     updateSpeakerLabels(messages);
     const isNewUser = sessionsState.list.filter((s) => s.id).length === 0;
+    const showWelcome = appState.me?.welcomeCohort
+      ? isWelcomeConversation(sessionsState.list, appState.me.user, chatState.threadRef, chatState.scopeId)
+      : isNewUser && !messages.length;
     let messageContent: Array<TemplateResult | typeof nothing> | TemplateResult | typeof nothing = nothing;
     const inheritedOffset = chatState.inheritedExpanded ? chatState.inheritedMessages.length : 0;
     if (messages.length) {
       messageContent = messages.map((m, i) =>
         settledChatMessage(m, i - inheritedOffset, agent.state.isStreaming && m === agent.state.streamingMessage),
       );
-    } else if (isNewUser) {
-      messageContent = welcomeGreeting();
     }
     const tier = ctx.density();
     const glanceTier = tier === "card" || tier === "strip" ? tier : null;
@@ -1327,6 +1337,7 @@ export function createChatSurface(
           <section class="chat-scroll">
             ${pinnedStrip()}
             <div class="message-stack ${emptyChat ? "empty-stack" : ""}">
+              ${showWelcome ? welcomeGreeting(!messages.length) : nothing}
               ${inheritedHeader()} ${chatState.earlierCount > 0 ? earlierNotice(agent) : nothing} ${messageContent}
               ${emptyChat && !isNewUser ? html`<h1 class="chat-cta">${chatCta()}</h1>` : nothing}
               ${showStateError(messages, agent.state.errorMessage) ? html`<div class="composer-error inline">${agent.state.errorMessage}</div>` : nothing}
@@ -1335,6 +1346,7 @@ export function createChatSurface(
           <div class="chat-bottom-dock">
             ${
               emptyChat &&
+              !(isNewUser && appState.me?.welcomeCohort) &&
               !glanceTier &&
               (!ctx.pane || tier === "full") &&
               !chatState.sessionId &&
@@ -1696,31 +1708,7 @@ export function createChatSurface(
 
   function connectorWidget(link: ConnectorLink): TemplateResult {
     if (link.provider === "slack-bot") return html`<qm-slack-setup></qm-slack-setup>`;
-    const composio = link.provider === "composio";
-    const name =
-      (composio ? "your account" : CONNECTOR_NAMES[link.provider]) ??
-      (link.provider ? link.provider[0]!.toUpperCase() + link.provider.slice(1) : "your account");
-    if (!composio && link.provider && connectedConnectors.has(link.provider)) {
-      return html`<div class="connector-widget connected" role="status">
-        <span class="connector-widget-icon">${icon(Check, 18)}</span>
-        <span class="connector-widget-text"
-          ><strong>Connected ${name}</strong><small>Authorized. Its tools work here now</small></span
-        >
-      </div>`;
-    }
-    return html`<a
-      class="connector-widget"
-      href=${composio ? link.url : withReturnTo(link.url)}
-      target="_blank"
-      rel="noreferrer"
-    >
-      <span class="connector-widget-icon">${icon(Plug, 18)}</span>
-      <span class="connector-widget-text"
-        ><strong>${(composio && link.label) || `Connect ${name}`}</strong
-        ><small>${composio ? "Authorize access via Composio" : "Authorize access in a new tab"}</small></span
-      >
-      ${icon(ChevronRight, 16)}
-    </a>`;
+    return connectorCard(link, connectedConnectors.has(link.provider), withReturnTo);
   }
 
   function playgroundCard(playground: PlaygroundArtifact): TemplateResult {
@@ -1772,14 +1760,27 @@ export function createChatSurface(
     const parts: TemplateResult[] = [];
     for (const chunk of message.content) {
       if (chunk.type === "text") {
-        const shown = assistantDisplayText(chunk.text);
-        const links = shown.trim() ? connectorLinksIn(shown, location.origin) : [];
-        const body = links.length ? stripConnectorLinks(shown, links) : shown;
-        if (body.trim())
-          parts.push(
-            html`<div class="streaming-text ${isStreaming ? "live-stream" : ""}" dir="auto">${markdown(body)}</div>`,
-          );
-        for (const link of links) parts.push(connectorWidget(link));
+        for (const part of setupContent(assistantDisplayText(chunk.text))) {
+          if (part.type !== "text") {
+            parts.push(html`<qm-onboarding-welcome
+              .me=${appState.me}
+              .base=${withBase("")}
+              .adminBase=${ADMIN_BASE}
+              .widget=${part.type === "slack" ? "slack" : "apps"}
+              .setupOnly=${true}
+              .animateWelcome=${false}
+            ></qm-onboarding-welcome>`);
+            continue;
+          }
+          const shown = part.text;
+          const links = shown.trim() ? connectorLinksIn(shown, location.origin) : [];
+          const body = links.length ? stripConnectorLinks(shown, links) : shown;
+          if (body.trim())
+            parts.push(
+              html`<div class="streaming-text ${isStreaming ? "live-stream" : ""}" dir="auto">${markdown(body)}</div>`,
+            );
+          for (const link of links) parts.push(connectorWidget(link));
+        }
       }
       if (chunk.type === "thinking" && chunk.thinking.trim()) {
         parts.push(
@@ -2708,6 +2709,10 @@ export function createChatSurface(
   }
 
   function scrollTranscript(force = false): void {
+    if (ctx.container()?.querySelector(".empty-chat qm-onboarding-welcome")) {
+      transcriptViewport.sync(null);
+      return;
+    }
     transcriptViewport.sync(ctx.container()?.querySelector<HTMLElement>(".chat-scroll") ?? null);
     transcriptViewport.follow(force);
   }

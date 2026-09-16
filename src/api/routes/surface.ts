@@ -1098,6 +1098,7 @@ async function getSurfaceConfig(ctx: ApiCtx): Promise<void> {
     ? baseModel!
     : defaultModelForHarness(harnessId, deps.baseModelDefault);
   const resolvedBranding = {
+    ...(branding.orgName ? { orgName: branding.orgName } : {}),
     ...(branding.accent ? { accent: branding.accent } : {}),
     ...(branding.mark ? { mark: branding.mark } : {}),
     ...(branding.markUrl ? { markUrl: branding.markUrl } : {}),

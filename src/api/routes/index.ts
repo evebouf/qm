@@ -1,3 +1,4 @@
+import { composioRoutes } from "./composio.ts";
 import { sendJson } from "../http.ts";
 import { type ApiCtx, type BaseCtx, type Route } from "./route.ts";
 import { connectorRawRoutes, connectorRoutes } from "./connectors.ts";
@@ -63,6 +64,7 @@ export const apiRoutes: ReadonlyArray<Route<ApiCtx>> = [
   ...keychainRoutes,
   ...secretDropRoutes,
   ...connectorRoutes,
+  ...composioRoutes,
   ...adminRoutes,
   ...skillPackRoutes,
   ...surfaceRoutes,

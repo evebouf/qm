@@ -36,6 +36,7 @@ import {
 } from "../../chassis/src/env.ts";
 
 const PORT = portFromEnv(8096);
+const welcomeCohort = process.env.WEB_UI_WELCOME_COHORT?.trim().slice(0, 40) || undefined;
 const suggestedActivities = parseSuggestedActivities(process.env.WEB_UI_SUGGESTED_ACTIVITIES);
 const PUBLIC_URL = (process.env.WEB_UI_PUBLIC_URL ?? `http://localhost:${PORT}`).replace(/\/$/, "");
 const WEB_UI_DEV = process.env.WEB_UI_DEV === "1";
@@ -76,6 +77,7 @@ const brandingCache = createBrandingCache(async () => {
   if (r.status !== 200) throw new Error(`surface-config ${r.status}`);
   const b = (JSON.parse(r.text) as { branding?: Record<string, unknown> }).branding;
   return {
+    ...(typeof b?.orgName === "string" ? { orgName: b.orgName } : {}),
     ...(typeof b?.accent === "string" ? { accent: b.accent } : {}),
     ...(typeof b?.mark === "string" ? { mark: b.mark } : {}),
     ...(typeof b?.markUrl === "string" ? { markUrl: b.markUrl } : {}),
@@ -1136,11 +1138,31 @@ const apiRoutes: readonly WebRoute[] = [
   },
 
   {
+    method: "GET",
+    path: "/api/composio/toolkits",
+    handle: async (c) =>
+      relayCore(
+        c.res,
+        "GET",
+        `/v1/composio/toolkits?${new URLSearchParams({ cursor: c.url.searchParams.get("cursor") ?? "" })}`,
+      ),
+  },
+  {
+    method: "POST",
+    path: "/api/composio/authorize",
+    handle: async (c) => {
+      const body = await readJson<{ toolkit?: unknown }>(c.req, c.res, false);
+      if (!body) return;
+      c.res.setHeader("Cache-Control", "no-store");
+      return relayCore(c.res, "POST", "/v1/composio/authorize", JSON.stringify({ toolkit: body.toolkit }));
+    },
+  },
+  {
     match: (_method, pathname) => pathname === "/me",
     handle: async (c) => {
       const { req, res, user } = c;
       res.setHeader("set-cookie", sessionCookie(user));
-      const [allPermissions, workspaceUrl, authStatus, activityConfig] = await Promise.all([
+      const [allPermissions, workspaceUrl, authStatus, activityConfig, companyBranding] = await Promise.all([
         userPermissions(),
         slackWorkspaceUrl(),
         coreFetch("GET", `/v1/user-model-auth/status?principalId=${encodeURIComponent(user)}`, "", 5_000).catch(
@@ -1149,6 +1171,7 @@ const apiRoutes: readonly WebRoute[] = [
         coreFetch("GET", "/v1/suggested-activities", "", 2_000)
           .then((response) => response.status === 200 && JSON.parse(response.text).enabled === true)
           .catch(() => false),
+        brandingCache.forRender(),
       ]);
       if (authStatus === null || authStatus.status !== 200) {
         return json(res, 503, {
@@ -1166,12 +1189,14 @@ const apiRoutes: readonly WebRoute[] = [
       return json(res, 200, {
         user,
         org: ORG,
+        companyName: companyBranding.orgName?.trim() || null,
         mode: AUTH_MODE,
         slackWorkspaceUrl: workspaceUrl,
         individualModelAuth: parsed.individualModelAuth === true,
         modelAuthConnected: (parsed.connections?.length ?? 0) > 0,
         impersonatedBy: resolveIdentity(req)?.impersonator ?? null,
         displayName: resolveIdentity(req)?.name ?? null,
+        ...(welcomeCohort ? { welcomeCohort } : {}),
         ...(suggestedActivities.length ? { suggestedActivities } : {}),
         ...(activityConfig ? { suggestedActivitiesGeneration: true } : {}),
         permissions,
