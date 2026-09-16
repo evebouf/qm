@@ -1,4 +1,5 @@
 import { recoveredRuntime } from "../harness/runtime-recovery.ts";
+import { createCanWriteScope } from "../resolution/scope-membership.ts";
 import { evaluateCommandWithLayer } from "../policy/command-policy.ts";
 import { createSecretValueMasker } from "../security/secret-masking.ts";
 import { shq } from "../util/shell.ts";
@@ -59,13 +60,12 @@ import {
 } from "../credentials/device-flow-persist.ts";
 import type { CredentialPathSpec } from "../credentials/resident-paths.ts";
 import type { DeviceFlowCutoverMode } from "../credentials/device-flow-cutover.ts";
-import { type ResidentAuthConnector, RESIDENT_AUTH_CONNECTORS, mergeConnectors } from "../credentials/resident-auth.ts";
 import {
   configuredConnectorProviders,
   connectorStatusIsStale,
   refreshConnectorStatus,
 } from "../credentials/connector-status.ts";
-import { renderComputerBlock, renderResidentLoginsBlock, renderConnectedAppsBlock } from "./environment-facts.ts";
+import { renderComputerBlock, renderConnectedAppsBlock } from "./environment-facts.ts";
 import { PROVIDERS } from "../connectors/oauth.ts";
 import { estimateCostUsd } from "../ratelimit/budget.ts";
 import {
@@ -244,8 +244,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
   }
   const leaseKeepaliveMs = Math.floor(deps.sessions.leaseTtlMs / 3);
   const skillMaterializer = createSkillMaterializer(deps.advisoryLock);
-  const residentAuthConnectors = (): ResidentAuthConnector[] =>
-    mergeConnectors(RESIDENT_AUTH_CONNECTORS, deps.deploymentLayer?.connectors ?? []);
   const pending = deps.approvals ?? createMemoryMap<PendingApprovalRecord>();
   const transcripts = createTranscriptSource(deps.sessions);
   const approvalGrants = deps.approvalGrants ?? createMemoryMap<CommandApprovalGrant>();
@@ -538,6 +536,29 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       if (!deps.identity.isInternal(actor)) {
         return { status: "refused", reason: "internal-only: non-internal principals cannot interact" };
       }
+      const delegatedSession = conversation.threadRef.startsWith("agent:main:subagent:")
+        ? await deps.sessions.getByThread(conversation.threadRef)
+        : null;
+      if (conversation.threadRef.startsWith("agent:main:subagent:")) {
+        const canWrite = createCanWriteScope({
+          managedGroups: deps.managedGroups
+            ? {
+                recognizes: (ref) => deps.managedGroups!.recognizes(ref),
+                members: (ref) => deps.managedGroups!.members(ref),
+                membership: async (ref, id) => (await deps.managedGroups!.members(ref))?.includes(id),
+              }
+            : undefined,
+          directory: deps.directory,
+          identity: deps.identity,
+        });
+        if (
+          !delegatedSession?.spawnMeta ||
+          delegatedSession.scopeId !== deps.resolution.scopeFor(conversation, actor) ||
+          !(await deps.sessions.getForParticipant(delegatedSession.id, actor.id)) ||
+          !(await canWrite(actor.id, delegatedSession.scopeId))
+        )
+          return { status: "refused", reason: "subagent session access is no longer current" };
+      }
       const managedGroupRef =
         conversation.kind === "group" &&
         conversation.channelRef &&
@@ -736,6 +757,13 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             ...(input.inboundNotes ?? []).map((note) => ({ source: "inbound-file-note", content: note })),
           ]
         : [];
+      const sessionSender = input.sessionSenderId ? await deps.sessions.get(input.sessionSenderId) : null;
+      const verifiedSessionMessage = Boolean(
+        sessionSender &&
+        automatedTurn &&
+        sessionSender.scopeId === scopeId &&
+        (await deps.sessions.getForParticipant(sessionSender.id, actor.id)),
+      );
       const screenPayload = screenInbound
         ? securityScreenPayload({
             ...input,
@@ -743,6 +771,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             overheard: [],
             externalPromptData,
             verifiedSwarm: Boolean(input.swarm && swarmBinding),
+            verifiedSessionMessage,
           })
         : null;
       let flaggedScreenedInput: { reason: string; sources: string[] } | undefined;
@@ -857,6 +886,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
                 entrySeq: imported.seq,
                 meta: {
                   overheard: true,
+                  ...(overheard.sourceRole ? { sourceRole: overheard.sourceRole } : {}),
                   bareText: overheard.text,
                   ts: overheard.ts,
                   ...(overheard.name ? { author: overheard.name } : {}),
@@ -939,7 +969,8 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           ],
         };
       }
-      const strictReadOnly = input.readOnly === true;
+      const childFloor = delegatedSession?.spawnMeta?.readOnly === true;
+      const strictReadOnly = input.readOnly === true || input.privateSessionMessage === true || childFloor;
       const useMemory = input.skipMemory !== true;
       const environmentId = await resolveEnvironmentId(deps.environments, scopeId);
       const rwLayer = resolution.layers.find((l) => l.mode === "rw");
@@ -1002,6 +1033,9 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       }
       const sharedCore = applyPromptVars(SHARED_CORE_MD, { botName, botHandle, orgName });
       let systemPrompt = `${modeFrame}\n\n${resolution.systemPrompt}\n\n${sharedCore}\n\n${renderSecurityPolicyPrompt(securityPolicy)}`;
+      if (input.privateSessionMessage)
+        systemPrompt +=
+          "\n\nThis is a private message from another session. You may read context and reply using session.write with the sender session ID. Replies remain private and read-only. Do not open children or interrupt work. Reply only when there is useful information to send; reply chains are bounded.";
       const sharingPrompt = renderSharingPosturePrompt(actor, sharingSources);
       if (sharingPrompt) systemPrompt += `\n\n${sharingPrompt}`;
       const scopeProfile = supportsScopeProfile(deps.sandbox)
@@ -1061,6 +1095,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
               for (const chunk of securityScreenChunks("tool_result:shared_skill", payload)) {
                 const verdict = await classifySecurityData(chunk, actor.id, scopeId, recordScreenRequest, {
                   hook: "tool_response",
+                  request: input.text,
                   surface: "shared_skill",
                   origin: input.origin.kind,
                 });
@@ -1338,6 +1373,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
       }
       perf.credsMs += Date.now() - credsStart;
       let sharedCredsBlock = "";
+      const envCredLines: string[] = [];
       let egressTokenForTurn: string | undefined;
       // Service credentials: one read of the org's credential list and one grant scan feed both
       // the env-delivery gate (below) and the broker token mint (further down). Same grants gate both.
@@ -1375,8 +1411,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           )
             continue;
           const rec = await deps.serviceCreds.getServiceCredentialSecret(orgScope, cred.slug);
-          if (rec?.secret && rec.delivery === "env" && rec.enabled && rec.envKey === cred.envKey)
+          if (rec?.secret && rec.delivery === "env" && rec.enabled && rec.envKey === cred.envKey) {
             connectorEnv[cred.envKey] = rec.secret;
+            envCredLines.push(`- \`${cred.slug}\` → \`${cred.envKey}\``);
+          }
         }
         const browseSteps = deps.config?.getBrowseMaxSteps(toScopeId("org", orgId()));
         if (browseSteps && !("BROWSE_LAB_MAX_STEPS" in connectorEnv))
@@ -1521,7 +1559,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             egress: egressClaimAllowingControlPlane(
               resolution.egress,
               deps.apiBaseUrl ?? "",
-              securityPolicy.inboundScreening === "external",
+              securityPolicy.denyPrivateNetworks,
             ),
             exp: Date.now() + CAPABILITY_TTL_MS,
           },
@@ -1602,6 +1640,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         provisionResource,
         provisionOwnerAuth,
         ensureSkillTree,
+        readSkill,
         provisionForReach,
         reclaimBox,
         provisionPending,
@@ -1631,7 +1670,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         visibleSkills,
         visibleSkillsForTurn,
         skillMaterializer,
-        residentAuthConnectors,
         emitGapWork,
         perf,
       });
@@ -1716,6 +1754,9 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             };
           }
           if (!input.approval.approved) {
+            const messagePrefix = "security-screen-release:session_message_";
+            if (p.approvalKey?.startsWith(messagePrefix))
+              await deps.sessionSyscalls?.rejectMessage?.(session.id, p.approvalKey.slice(messagePrefix.length));
             await pending.delete(input.approval.requestId);
             deps.auditLog.record({
               at: Date.now(),
@@ -1808,6 +1849,13 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         }
 
         systemPrompt += sharedCredsBlock;
+        if (envCredLines.length) {
+          systemPrompt +=
+            "\n\n## Org credentials on your computer\n" +
+            "These credentials are authorized for this conversation and supplied to commands on its scoped computer, not scratch computers. " +
+            "Use the matching access skill. Never print secret values or save them in source or workspace files.\n" +
+            envCredLines.join("\n");
+        }
         if (actorIsOrgAdmin) {
           systemPrompt +=
             "\n\n## Acting for an org admin\n" +
@@ -1886,17 +1934,6 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             ...(audienceMembers.some((p) => samePerson(p.id, actor.id)) ? [] : [actor]),
             ...audienceMembers,
           ].map((p) => ({ id: p.id, ...(p.displayName ? { displayName: p.displayName } : {}) }));
-          const detectedByOwner = new Map<string, string[]>();
-          if (deps.livenessCache) {
-            for (const m of members) {
-              const rec = await deps.livenessCache.get(personalScope(m.id)).catch(() => null);
-              if (!rec) continue;
-              const labels = residentAuthConnectors()
-                .filter((c) => rec.connectors[c.id] === "active")
-                .map((c) => c.label);
-              if (labels.length) detectedByOwner.set(m.id, labels);
-            }
-          }
           const [entriesByOwner, connectorsByOwner, scopeGrants, scopeAsks, ownerAsks] = await Promise.all([
             deps.keychain.listByOwners(members.map((m) => m.id)),
             deps.keychain.listConnectorsByOwners(members.map((m) => m.id)),
@@ -1913,24 +1950,10 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
             connectorsByOwner,
             scopeGrants,
             injected: keychainInjected,
-            detectedByOwner,
             scopeAsks,
             ownerAsks,
           });
           if (keychainBlock) systemPrompt += `\n\n${keychainBlock}`;
-        }
-        if (!strictReadOnly && deps.livenessCache) {
-          const liveness = await deps.livenessCache
-            .get(memoryScopeId)
-            .catch(swallowAs("orchestrator: liveness cache read", null));
-          const loginsBlock = renderResidentLoginsBlock(liveness, residentAuthConnectors());
-          if (loginsBlock) {
-            systemPrompt += `\n\n${loginsBlock}`;
-            if (deps.scratchExec) {
-              systemPrompt +=
-                '\nThese logins live on your scoped computer — `execute` reaches them only with scope:"scoped"; a scratch run has none of them.';
-            }
-          }
         }
         if (!strictReadOnly && deps.resolveConnectorClient && conversation.kind === "dm") {
           let status = null;
@@ -2177,6 +2200,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           ...(ownerAuthCommand ? { ownerAuthCommand } : {}),
           ...(scopedCommand ? { scopedCommand } : {}),
           ensureSkillTree,
+          readSkill,
           ...(reachAvailable
             ? {
                 reach: {
@@ -2338,6 +2362,17 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           ...(deps.control && controlClaims ? { control: deps.control, controlClaims } : {}),
           ...(deps.webhookPublicUrl ? { webhookPublicUrl: deps.webhookPublicUrl } : {}),
           ...(surfaceToolDeps ? { surface: surfaceToolDeps } : {}),
+          ...(deps.sessionSyscalls &&
+          (await deps.featureFlags?.enabled("persistent_subagents", `personal:${actor.id}` as ScopeId)) === true
+            ? {
+                sessionSyscalls: deps.sessionSyscalls.forTurn({
+                  session,
+                  scopeId: scopeId as ScopeId,
+                  orgScopeId: resolution.orgScopeId,
+                  request: { ...input, readOnly: strictReadOnly, cancel: turnAbort.signal },
+                }),
+              }
+            : {}),
           ...(strictReadOnly ? {} : { attach: attachStaging.attach }),
           ...(strictReadOnly || !deps.keychain
             ? {}
@@ -2423,6 +2458,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
                   ? ({ content }) =>
                       classifySecurityData(content, actor.id, scopeId, undefined, {
                         hook: "tool_response",
+                        request: input.text,
                         surface: "inbound_file",
                         origin: input.origin.kind,
                       })
@@ -2459,7 +2495,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
         }
 
         const importedOverheard: OverheardEntryPayload[] = [];
-        if (!input.envelopeWrapped && input.overheard?.length) {
+        if ((!input.envelopeWrapped || humanTurn) && input.overheard?.length) {
           const toImport = await transcripts
             .forRender(session.id)
             .then((read) => selectOverheardToImport(input.overheard!, recordedMessageTimestamps(read.entries)))
@@ -2493,6 +2529,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
                 entrySeq: imported.seq,
                 meta: {
                   overheard: true,
+                  ...(p.sourceRole ? { sourceRole: p.sourceRole } : {}),
                   bareText: p.text,
                   ts: p.ts,
                   ...(p.changeTime ? { changeTime: p.changeTime } : {}),
@@ -2639,7 +2676,19 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
           ? resumeNote({ backgroundJobs: !!backgroundBroker, workRecorded: !!resume })
           : baseText;
         const isPollFire = automatedTurn && !!input.surface && isPollSurface(input.surface);
-        const sessionUsedTools = visibleHistory.some((e) => e.type === "tool_call");
+        const sessionUsedTools = visibleHistory.some(
+          (e) =>
+            e.type === "tool_call" &&
+            !(
+              e.payload !== null &&
+              typeof e.payload === "object" &&
+              "tool" in e.payload &&
+              e.payload.tool === "read" &&
+              "path" in e.payload &&
+              typeof e.payload.path === "string" &&
+              e.payload.path.startsWith("skill://")
+            ),
+        );
         if (
           !strictReadOnly &&
           deps.eagerProvision &&
@@ -2913,6 +2962,7 @@ export function createOrchestrator(deps: OrchestratorDeps): Orchestrator {
                           chunks.slice(i, i + 4).map((chunk) =>
                             classifySecurityData(chunk, actor.id, scopeId, recordScreenRequest, {
                               hook: "tool_response",
+                              request: input.text,
                               surface: toolLabel,
                               origin: input.origin.kind,
                             }),

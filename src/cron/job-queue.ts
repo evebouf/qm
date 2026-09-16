@@ -18,6 +18,7 @@ export interface CronJobQueue {
   start(handlers: CronQueueHandlers, tickIntervalMs: number): Promise<void>;
   enqueueFire(job: CronFireJob): Promise<void>;
   healthy(): boolean;
+  stopClaims?(): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -50,12 +51,17 @@ export function createPgBossCronQueue(
   boss.on("error", (e) => console.error("[cron-queue] pg-boss error:", errMessage(e)));
   let ticker: Sweeper | null = null;
   let started = false;
+  let initialized = false;
   let lastSendOkAt = 0;
   return {
     async start(handlers, tickIntervalMs) {
+      if (started) return;
       pg ??= createPgPool(databaseUrl, []);
       try {
-        await boss.start();
+        if (!initialized) {
+          await boss.start();
+          initialized = true;
+        }
         await boss.createQueue(FIRE_QUEUE, { policy: "short", notify: true });
         await boss.createQueue(TICK_QUEUE, { policy: "short", notify: true });
         const localConcurrency = Math.min(32, Math.max(1, Math.trunc(fireConcurrency)));
@@ -68,8 +74,15 @@ export function createPgBossCronQueue(
         );
         await boss.work(TICK_QUEUE, { pollingIntervalSeconds: 1 }, () => handlers.onTick());
       } catch (e) {
-        await boss.stop({ close: true, graceful: false }).catch(() => {});
-        await closePool();
+        if (initialized) {
+          await Promise.all([
+            boss.offWork(FIRE_QUEUE, { wait: false }),
+            boss.offWork(TICK_QUEUE, { wait: false }),
+          ]).catch(() => {});
+        } else {
+          await boss.stop({ close: true, graceful: false }).catch(() => {});
+          await closePool();
+        }
         throw e;
       }
       started = true;
@@ -97,12 +110,18 @@ export function createPgBossCronQueue(
     healthy() {
       return started && Date.now() - lastSendOkAt < HEALTHY_SEND_MAX_AGE_MS;
     },
+    async stopClaims() {
+      started = false;
+      void ticker?.stop();
+      await Promise.all([boss.offWork(FIRE_QUEUE, { wait: false }), boss.offWork(TICK_QUEUE, { wait: false })]);
+    },
     async stop() {
       started = false;
-      ticker?.stop();
+      await ticker?.stop();
       try {
         await boss.stop({ close: true, graceful: false });
       } finally {
+        initialized = false;
         await closePool();
       }
     },

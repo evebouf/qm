@@ -2,6 +2,15 @@ import { postCallText, postResultOk } from "./surface-post.ts";
 import type { PendingApproval, ToolActivity, WorkBlock } from "./core-bridge.ts";
 
 export interface ToolPayload {
+  sessionId?: string;
+  title?: string;
+  task?: string;
+  target?: string;
+  delivered?: string;
+  interrupt?: boolean;
+  status?: string;
+  children?: number;
+
   tool?: string;
   command?: string;
   path?: string;
@@ -210,4 +219,37 @@ function collapseToolItems(items: TimelineItem[], status: WorkBlock["status"]): 
     out.push({ kind: "tool", row: { ...item.row, attempts: item.row.attempts ?? 1 } });
   }
   return out;
+}
+
+export function sessionToolView(
+  call: ToolPayload,
+  result: ToolPayload,
+  sessions: readonly { id: string; title?: string | null }[],
+): { action: string; chipTitle?: string; sessionId?: string; detail: string } {
+  const action = call.interrupt === true ? "interrupt" : (call.action ?? result.action ?? "");
+  const target = result.sessionId ?? call.target;
+  const session =
+    sessions.find((row) => row.id === target || row.title === target) ??
+    sessions.find((row) => result.result?.includes(`(sessionId ${row.id})`));
+  const sessionId = session?.id ?? result.sessionId;
+  let chipTitle = session?.title || result.title || call.name || "Subagent";
+  let detail = "";
+  if (action === "wait") return { action, detail: "for agent messages" };
+  if (action === "read" && !target && result.children === undefined) return { action, detail: "subagents" };
+  if (action === "read" && result.children !== undefined) {
+    return { action, detail: `${result.children} subagent${result.children === 1 ? "" : "s"}` };
+  }
+  if (action === "open" && !session?.title && !result.title && !call.name && call.task) {
+    chipTitle = call.task.split("\n")[0].slice(0, 48);
+  }
+  if (action === "write" || action === "send_message" || action === "followup_task") {
+    const verbs: Record<string, string> = {
+      steered: "steered",
+      queued_turn: "queued a turn",
+      queued_message: "",
+      interrupted: "interrupted",
+    };
+    detail = result.delivered ? (verbs[result.delivered] ?? result.delivered) : "";
+  } else if (action === "read") detail = result.status ?? "";
+  return { action, chipTitle, ...(sessionId ? { sessionId } : {}), detail };
 }

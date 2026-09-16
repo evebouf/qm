@@ -1,3 +1,5 @@
+import { appEditSlug } from "../src/app-edit.ts";
+import { composioCallbackUrl } from "./composio-return.ts";
 import { sharedSessionHtml } from "./shared-session.ts";
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -35,7 +37,9 @@ import {
   portFromEnv,
 } from "../../chassis/src/env.ts";
 
+const SUBAGENT_THREAD_PREFIX = "agent:main:subagent:";
 const PORT = portFromEnv(8096);
+const welcomeCohort = process.env.WEB_UI_WELCOME_COHORT?.trim().slice(0, 40) || undefined;
 const suggestedActivities = parseSuggestedActivities(process.env.WEB_UI_SUGGESTED_ACTIVITIES);
 const PUBLIC_URL = (process.env.WEB_UI_PUBLIC_URL ?? `http://localhost:${PORT}`).replace(/\/$/, "");
 const WEB_UI_DEV = process.env.WEB_UI_DEV === "1";
@@ -76,6 +80,7 @@ const brandingCache = createBrandingCache(async () => {
   if (r.status !== 200) throw new Error(`surface-config ${r.status}`);
   const b = (JSON.parse(r.text) as { branding?: Record<string, unknown> }).branding;
   return {
+    ...(typeof b?.orgName === "string" ? { orgName: b.orgName } : {}),
     ...(typeof b?.accent === "string" ? { accent: b.accent } : {}),
     ...(typeof b?.mark === "string" ? { mark: b.mark } : {}),
     ...(typeof b?.markUrl === "string" ? { markUrl: b.markUrl } : {}),
@@ -306,7 +311,11 @@ function resolveWebConversation(
   scope: string | undefined,
   channelName: string | undefined,
 ): { conversation: WebConversation } | { error: string; message: string } {
-  if (!threadRef.startsWith(`web:${user}:`) && !(scope?.startsWith("channel:") || scope?.startsWith("group:"))) {
+  if (
+    !threadRef.startsWith(`web:${user}:`) &&
+    !threadRef.startsWith(SUBAGENT_THREAD_PREFIX) &&
+    !(scope?.startsWith("channel:") || scope?.startsWith("group:"))
+  ) {
     return { error: "forbidden_thread", message: "this conversation can only be continued from its own context" };
   }
   const conversation = conversationForScope(user, threadRef, scope, channelName);
@@ -327,12 +336,18 @@ function webTurnBase(
   text: string,
 ) {
   const displayName = resolveIdentity(req)?.name ?? null;
+  const appSlug = appEditSlug(threadRef, user);
   return {
     surface: "web",
     actor: { externalId: user, ...(displayName ? { displayName } : {}) },
     conversation,
     liveActor: true,
     deliveryTarget: threadRef,
+    ...(appSlug
+      ? {
+          conversationHeader: `The user is chatting beside their deployed app ${JSON.stringify(appSlug)}. Requests about this app refer to that deployment. Use the existing app source and publish updates to the same deployment when requested. This context does not grant additional permissions.`,
+        }
+      : {}),
     text,
   };
 }
@@ -1136,11 +1151,52 @@ const apiRoutes: readonly WebRoute[] = [
   },
 
   {
+    method: "GET",
+    path: "/api/composio/toolkits",
+    handle: async (c) =>
+      relayCore(
+        c.res,
+        "GET",
+        `/v1/composio/toolkits?${new URLSearchParams({ cursor: c.url.searchParams.get("cursor") ?? "" })}`,
+      ),
+  },
+  {
+    method: "GET",
+    path: "/api/composio/connections",
+    handle: async (c) => {
+      c.res.setHeader("Cache-Control", "no-store");
+      return relayCore(
+        c.res,
+        "GET",
+        `/v1/composio/connections?${new URLSearchParams({ cursor: c.url.searchParams.get("cursor") ?? "" })}`,
+      );
+    },
+  },
+  {
+    method: "POST",
+    path: "/api/composio/authorize",
+    handle: async (c) => {
+      const body = await readJson<{ toolkit?: unknown; returnTo?: unknown; state?: unknown }>(c.req, c.res, false);
+      if (!body) return;
+      c.res.setHeader("Cache-Control", "no-store");
+      const callbackUrl = composioCallbackUrl(PUBLIC_URL, body.returnTo, body.state);
+      if (!callbackUrl && (body.returnTo !== undefined || body.state !== undefined)) {
+        return json(c.res, 400, { error: "invalid_return_url" });
+      }
+      return relayCore(
+        c.res,
+        "POST",
+        "/v1/composio/authorize",
+        JSON.stringify({ toolkit: body.toolkit, ...(callbackUrl ? { callbackUrl } : {}) }),
+      );
+    },
+  },
+  {
     match: (_method, pathname) => pathname === "/me",
     handle: async (c) => {
       const { req, res, user } = c;
       res.setHeader("set-cookie", sessionCookie(user));
-      const [allPermissions, workspaceUrl, authStatus, activityConfig] = await Promise.all([
+      const [allPermissions, workspaceUrl, authStatus, activityConfig, companyBranding] = await Promise.all([
         userPermissions(),
         slackWorkspaceUrl(),
         coreFetch("GET", `/v1/user-model-auth/status?principalId=${encodeURIComponent(user)}`, "", 5_000).catch(
@@ -1149,6 +1205,7 @@ const apiRoutes: readonly WebRoute[] = [
         coreFetch("GET", "/v1/suggested-activities", "", 2_000)
           .then((response) => response.status === 200 && JSON.parse(response.text).enabled === true)
           .catch(() => false),
+        brandingCache.forRender(),
       ]);
       if (authStatus === null || authStatus.status !== 200) {
         return json(res, 503, {
@@ -1166,12 +1223,14 @@ const apiRoutes: readonly WebRoute[] = [
       return json(res, 200, {
         user,
         org: ORG,
+        companyName: companyBranding.orgName?.trim() || null,
         mode: AUTH_MODE,
         slackWorkspaceUrl: workspaceUrl,
         individualModelAuth: parsed.individualModelAuth === true,
         modelAuthConnected: (parsed.connections?.length ?? 0) > 0,
         impersonatedBy: resolveIdentity(req)?.impersonator ?? null,
         displayName: resolveIdentity(req)?.name ?? null,
+        ...(welcomeCohort ? { welcomeCohort } : {}),
         ...(suggestedActivities.length ? { suggestedActivities } : {}),
         ...(activityConfig ? { suggestedActivitiesGeneration: true } : {}),
         permissions,
@@ -1200,6 +1259,16 @@ const apiRoutes: readonly WebRoute[] = [
         uploadFileName(url),
       );
     },
+  },
+  {
+    method: "GET",
+    path: "/api/resources/search",
+    handle: (c) =>
+      relayCore(
+        c.res,
+        "GET",
+        `/v1/resources/search?principalId=${encodeURIComponent(c.user)}&q=${encodeURIComponent((c.url.searchParams.get("q") ?? "").slice(0, 500))}`,
+      ),
   },
   {
     method: "GET",
@@ -1641,6 +1710,35 @@ const apiRoutes: readonly WebRoute[] = [
   },
   {
     method: "POST",
+    path: "/api/sessions/:id/adopt",
+    handle: async (c) => {
+      const p = await readJson<{ parentSessionId?: unknown }>(c.req, c.res);
+      if (!p) return;
+      if (typeof p.parentSessionId !== "string") return json(c.res, 400, { error: "bad_request" });
+      return relayCore(
+        c.res,
+        "POST",
+        `/v1/sessions/${encodeURIComponent(c.params.id!)}/adopt`,
+        JSON.stringify({ principalId: c.user, parentSessionId: p.parentSessionId }),
+      );
+    },
+  },
+  {
+    method: "POST",
+    path: "/api/sessions/:id/detach",
+    handle: async (c) => {
+      const { res, user } = c;
+      const id = c.params.id!;
+      return relayCore(
+        res,
+        "POST",
+        `/v1/sessions/${encodeURIComponent(id)}/detach`,
+        JSON.stringify({ principalId: user }),
+      );
+    },
+  },
+  {
+    method: "POST",
     path: "/api/sessions/:id/fork",
     handle: async (c) => {
       const { req, res, user } = c;
@@ -1925,20 +2023,6 @@ const apiRoutes: readonly WebRoute[] = [
   },
   {
     method: "GET",
-    path: "/api/deployments/:id/owner-url",
-    handle: async (c) => {
-      const { res, user } = c;
-      const id = c.params.id!;
-      if (!id || id.includes("/")) return json(res, 404, { error: "not_found" });
-      return relayCore(
-        res,
-        "GET",
-        `/v1/deployments/${encodeURIComponent(id)}/owner-url?principalId=${encodeURIComponent(user)}`,
-      );
-    },
-  },
-  {
-    method: "GET",
     path: "/api/deployments",
     handle: async (c) => {
       const { res, user } = c;
@@ -1982,6 +2066,25 @@ const apiRoutes: readonly WebRoute[] = [
       } catch {
         return json(res, 502, { error: "bad_core_response" });
       }
+    },
+  },
+  {
+    method: "GET",
+    path: "/api/deployments/:id/share",
+    handle: async ({ res, params }) => relayCap(res, "GET", `/v1/deployments/${encodeURIComponent(params.id!)}/share`),
+  },
+  {
+    method: "POST",
+    path: "/api/deployments/:id/share",
+    handle: async ({ req, res, params }) => {
+      const body = await readJson<{ scope?: unknown; recipient?: unknown; access?: unknown }>(req, res, false);
+      if (!body) return;
+      return relayCap(
+        res,
+        "POST",
+        `/v1/deployments/${encodeURIComponent(params.id!)}/share`,
+        JSON.stringify({ scope: body.scope, recipient: body.recipient, access: body.access }),
+      );
     },
   },
   {
@@ -2132,7 +2235,11 @@ const apiRoutes: readonly WebRoute[] = [
               : {}),
           };
         }
-        if (typeof p.threadRef === "string" && p.threadRef.startsWith("web:")) threadRef = p.threadRef;
+        if (
+          typeof p.threadRef === "string" &&
+          (p.threadRef.startsWith("web:") || p.threadRef.startsWith(SUBAGENT_THREAD_PREFIX))
+        )
+          threadRef = p.threadRef;
         if (typeof p.scopeId === "string" && p.scopeId) scope = p.scopeId;
         if (typeof p.channelName === "string" && p.channelName.trim()) channelName = p.channelName.trim().slice(0, 200);
         if (typeof p.model === "string" && p.model) model = p.model;
@@ -2214,7 +2321,8 @@ const apiRoutes: readonly WebRoute[] = [
     handle: async (c) => {
       const { res, url, user } = c;
       const threadRef = url.searchParams.get("threadRef") ?? "";
-      if (!threadRef.startsWith("web:")) return json(res, 404, { error: "not_found" });
+      if (!threadRef.startsWith("web:") && !threadRef.startsWith(SUBAGENT_THREAD_PREFIX))
+        return json(res, 404, { error: "not_found" });
       let queued: Array<{ runId: string; text: string; hasAttachments?: boolean }> = [];
       let durableRunId: string | null = null;
       const durable = await coreFetch("GET", `/v1/runs?threadRef=${encodeURIComponent(threadRef)}`);
@@ -2273,7 +2381,11 @@ const apiRoutes: readonly WebRoute[] = [
       if (!p) return;
       const kind = typeof p.kind === "string" ? p.kind : "";
       const text = typeof p.text === "string" ? p.text : undefined;
-      const threadRef = typeof p.threadRef === "string" && p.threadRef.startsWith("web:") ? p.threadRef : "";
+      const threadRef =
+        typeof p.threadRef === "string" &&
+        (p.threadRef.startsWith("web:") || p.threadRef.startsWith(SUBAGENT_THREAD_PREFIX))
+          ? p.threadRef
+          : "";
       let steerFields: { request: ReturnType<typeof webTurnBase> } | undefined;
       if (kind === "steer" && text !== undefined && threadRef) {
         const scope = typeof p.scopeId === "string" && p.scopeId ? p.scopeId : undefined;

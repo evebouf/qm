@@ -84,6 +84,26 @@ async function regenerateSessionTitle(ctx: ApiCtx): Promise<void> {
   return sendJson(res, 200, out);
 }
 
+async function detachSession(ctx: ApiCtx): Promise<void> {
+  const { res, app, body } = ctx;
+  const id = ctx.params.id!;
+  const principalId = (body as { principalId?: unknown }).principalId;
+  if (typeof principalId !== "string" || !principalId) {
+    return sendJson(res, 400, { error: "bad_request", message: "principalId required" });
+  }
+  const out = await app.detachSession(id, principalId);
+  if (!out) return sendJson(res, 404, { error: "not_found" });
+  return sendJson(res, 200, out);
+}
+
+async function adoptSession(ctx: ApiCtx): Promise<void> {
+  const { principalId, parentSessionId } = ctx.body as { principalId?: unknown; parentSessionId?: unknown };
+  if (typeof principalId !== "string" || typeof parentSessionId !== "string" || !principalId || !parentSessionId)
+    return sendJson(ctx.res, 400, { error: "bad_request" });
+  const out = await ctx.app.adoptSession(ctx.params.id!, parentSessionId, principalId);
+  return sendJson(ctx.res, out ? 200 : 404, out ?? { error: "not_found" });
+}
+
 async function forkSession(ctx: ApiCtx): Promise<void> {
   const { res, app, body } = ctx;
   const id = ctx.params.id!;
@@ -478,6 +498,13 @@ async function listSessions(ctx: ApiCtx): Promise<void> {
   const principalId = url.searchParams.get("principalId");
   if (!principalId) return sendJson(res, 400, { error: "bad_request", message: "principalId required" });
   return sendJson(res, 200, { sessions: await app.listSessions(principalId) });
+}
+
+async function searchResources(ctx: ApiCtx): Promise<void> {
+  const principalId = ctx.actor?.p ?? ctx.url.searchParams.get("principalId");
+  if (!principalId) return sendJson(ctx.res, 400, { error: "bad_request" });
+  const query = (ctx.url.searchParams.get("q") ?? "").slice(0, 500);
+  return sendJson(ctx.res, 200, await ctx.app.searchResources(principalId, query));
 }
 
 async function searchSessions(ctx: ApiCtx): Promise<void> {
@@ -1098,6 +1125,7 @@ async function getSurfaceConfig(ctx: ApiCtx): Promise<void> {
     ? baseModel!
     : defaultModelForHarness(harnessId, deps.baseModelDefault);
   const resolvedBranding = {
+    ...(branding.orgName ? { orgName: branding.orgName } : {}),
     ...(branding.accent ? { accent: branding.accent } : {}),
     ...(branding.mark ? { mark: branding.mark } : {}),
     ...(branding.markUrl ? { markUrl: branding.markUrl } : {}),
@@ -1286,9 +1314,12 @@ export const surfaceRoutes: ReadonlyArray<Route<ApiCtx>> = [
   ...sessionSharingRoutes,
   ...suggestedActivityRoutes,
   { method: "POST", path: "/v1/session-cap", auth: "source", handle: sessionCapability },
+  { method: "GET", path: "/v1/resources/search", auth: "source", handle: searchResources },
   { method: "GET", path: "/v1/sessions/search", auth: "source", handle: searchSessions },
   { method: "POST", path: "/v1/sessions/:id/title", auth: "source", handle: regenerateSessionTitle },
   { method: "POST", path: "/v1/sessions/:id/fork", auth: "source", handle: forkSession },
+  { method: "POST", path: "/v1/sessions/:id/adopt", auth: "source", handle: adoptSession },
+  { method: "POST", path: "/v1/sessions/:id/detach", auth: "source", handle: detachSession },
   { method: "GET", path: "/v1/sessions/:id/approvals", auth: "source", handle: listSessionApprovals },
   { method: "GET", path: "/v1/sessions/:id/background", auth: "source", handle: getSessionBackground },
   {

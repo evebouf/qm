@@ -1,3 +1,6 @@
+import { deploymentLiveSmokeRoutes } from "./deployment-live-smoke.ts";
+import { backgroundWorkRoutes } from "./background-work.ts";
+import { composioRoutes } from "./composio.ts";
 import { sendJson } from "../http.ts";
 import { type ApiCtx, type BaseCtx, type Route } from "./route.ts";
 import { connectorRawRoutes, connectorRoutes } from "./connectors.ts";
@@ -57,12 +60,15 @@ export const apiRoutes: ReadonlyArray<Route<ApiCtx>> = [
   ...swarmRoutes,
   ...searchRoutes,
   ...deploymentLayerRoutes,
+  ...backgroundWorkRoutes,
+  ...deploymentLiveSmokeRoutes,
   ...turnRoutes,
   ...runEventRoutes,
   ...credentialRoutes,
   ...keychainRoutes,
   ...secretDropRoutes,
   ...connectorRoutes,
+  ...composioRoutes,
   ...adminRoutes,
   ...skillPackRoutes,
   ...surfaceRoutes,
