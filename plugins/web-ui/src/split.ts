@@ -29,6 +29,7 @@ import {
   type IDockviewPanel,
   type IGroupHeaderProps,
   type IHeaderActionsRenderer,
+  type DockviewIDisposable,
   type ITabRenderer,
   type SerializedDockview,
   type TabPartInitParameters,
@@ -1244,6 +1245,7 @@ class StripDrop implements IHeaderActionsRenderer {
 
 class GroupActions implements IHeaderActionsRenderer {
   readonly element: HTMLElement;
+  private activePanelChange: DockviewIDisposable | null = null;
   private props: IGroupHeaderProps | null = null;
   private menuOpen = false;
 
@@ -1255,6 +1257,7 @@ class GroupActions implements IHeaderActionsRenderer {
   init(props: IGroupHeaderProps): void {
     this.props = props;
     groupActions.add(this);
+    this.activePanelChange = props.group.api.onDidActivePanelChange(() => this.draw());
     document.addEventListener("click", this.onDocClick);
     this.draw();
   }
@@ -1415,6 +1418,7 @@ class GroupActions implements IHeaderActionsRenderer {
   dispose(): void {
     document.removeEventListener("click", this.onDocClick);
     groupActions.delete(this);
+    this.activePanelChange?.dispose();
     this.props = null;
   }
 }
