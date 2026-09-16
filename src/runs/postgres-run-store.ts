@@ -1,3 +1,4 @@
+import { createPostgresNotifyBus } from "../persistence/postgres-notify-bus.ts";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { createPgPool } from "../persistence/pg-pool.ts";
@@ -7,7 +8,7 @@ import type { OrchestratorInput } from "../core/orchestrator.ts";
 import { resolveTurnOrigin } from "../core/turn-origin.ts";
 import type { EnqueueInput, EnqueueResult, ReapEvent, Run, RunDeliveryState, RunStore } from "./run-store.ts";
 import { isTerminal, releasesDedupKey } from "./run-store.ts";
-import { errMessage } from "../util/errors.ts";
+import { errMessage, swallow } from "../util/errors.ts";
 import type { LedgerBegin, ToolLedger } from "./tool-ledger.ts";
 
 export interface PostgresRuntime {
@@ -46,6 +47,7 @@ function rowToRun(r: Record<string, unknown>): Run {
 const FENCE_HOLD_MS = 600_000;
 
 export function createPostgresRunStore(connectionString: string, opts?: { maxClaims?: number }): PostgresRuntime {
+  const available = createPostgresNotifyBus<null>(connectionString, "qm_run_available", "run availability");
   const maxClaims = opts?.maxClaims ?? Number.POSITIVE_INFINITY;
   const events = new EventEmitter();
   events.setMaxListeners(0);
@@ -144,6 +146,40 @@ export function createPostgresRunStore(connectionString: string, opts?: { maxCla
     ],
   );
 
+  const availabilityListeners = new Map<() => void, number>();
+  let availabilityTimer: ReturnType<typeof setTimeout> | undefined;
+  let availabilityProbe: Promise<void> | null = null;
+  let availabilityClosed = false;
+
+  function watchAvailability(): void {
+    if (availabilityClosed || availabilityListeners.size === 0 || availabilityTimer || availabilityProbe) return;
+    availabilityTimer = setTimeout(
+      () => {
+        availabilityTimer = undefined;
+        availabilityProbe = q(
+          `SELECT EXISTS (
+          SELECT 1 FROM runs r WHERE r.status='pending' AND r.retry_after <= $1
+          AND NOT EXISTS (
+            SELECT 1 FROM runs blocked WHERE blocked.session_id=r.session_id
+              AND (blocked.status='running' OR (blocked.status='pending' AND blocked.retry_after > $1))
+          )
+        ) AS available`,
+          [Date.now()],
+        )
+          .then(({ rows }) => {
+            if (rows[0]?.available) for (const listener of availabilityListeners.keys()) listener();
+          })
+          .catch((error: unknown) => swallow("run availability probe", error))
+          .finally(() => {
+            availabilityProbe = null;
+            watchAvailability();
+          });
+      },
+      Math.min(...availabilityListeners.values()),
+    );
+    availabilityTimer.unref();
+  }
+
   async function getRun(id: string): Promise<Run | null> {
     const { rows } = await q("SELECT * FROM runs WHERE id = $1", [id]);
     return rows[0] ? rowToRun(rows[0]) : null;
@@ -168,7 +204,7 @@ export function createPostgresRunStore(connectionString: string, opts?: { maxCla
       const { rowCount } = await q(
         `UPDATE runs SET status='pending', lease_token=NULL, lease_expires_at=NULL, worker_id=NULL,
            error_attempts=error_attempts+$4, retry_after=$5
-         WHERE id=$1 AND lease_token=$2 AND status='running' AND ($3::bigint IS NULL OR lease_expires_at <= $3)`,
+         WHERE id=$1 AND lease_token=$2 AND status='running' AND ($3::bigint IS NULL OR lease_expires_at <= $3) RETURNING pg_notify('qm_run_available', 'null')`,
         [run.id, run.leaseToken, ifExpiredAt, countsAsError ? 1 : 0, Date.now() + Math.max(0, opts?.retryAfterMs ?? 0)],
       );
       return { requeued: rowCount > 0, applied: rowCount > 0 };
@@ -181,7 +217,7 @@ export function createPostgresRunStore(connectionString: string, opts?: { maxCla
     const { rowCount } = await q(
       `UPDATE runs SET status='failed', result=$4, lease_token=NULL, lease_expires_at=NULL, worker_id=NULL, finished_at=$5,
          error_attempts=error_attempts+$6
-       WHERE id=$1 AND lease_token=$2 AND status='running' AND ($3::bigint IS NULL OR lease_expires_at <= $3)`,
+       WHERE id=$1 AND lease_token=$2 AND status='running' AND ($3::bigint IS NULL OR lease_expires_at <= $3) RETURNING pg_notify('qm_run_available', 'null')`,
       [run.id, run.leaseToken, ifExpiredAt, JSON.stringify(result), Date.now(), countsAsError ? 1 : 0],
     );
     if (rowCount > 0) settle(await getRun(run.id));
@@ -189,6 +225,21 @@ export function createPostgresRunStore(connectionString: string, opts?: { maxCla
   }
 
   const runs: RunStore = {
+    subscribeAvailable(listener, options) {
+      availabilityListeners.set(listener, options?.pollMs ?? 50);
+      clearTimeout(availabilityTimer);
+      availabilityTimer = undefined;
+      const off = available.subscribe(listener, options);
+      watchAvailability();
+      return () => {
+        off();
+        availabilityListeners.delete(listener);
+        if (availabilityListeners.size === 0) {
+          clearTimeout(availabilityTimer);
+          availabilityTimer = undefined;
+        }
+      };
+    },
     ...(Number.isFinite(maxClaims) ? { maxClaims } : {}),
 
     async enqueue({ sessionId, request, dedupKey, maxAttempts = 3 }: EnqueueInput): Promise<EnqueueResult> {
@@ -197,7 +248,7 @@ export function createPostgresRunStore(connectionString: string, opts?: { maxCla
         `INSERT INTO runs(id, session_id, status, request, idempotency_key, attempts, max_attempts, created_at)
          VALUES ($1,$2,'pending',$3,$4,0,$5,$6)
          ON CONFLICT (idempotency_key) DO UPDATE SET id = runs.id
-         RETURNING *`,
+         RETURNING *, pg_notify('qm_run_available', 'null')`,
         [id, sessionId, JSON.stringify(request), dedupKey ?? null, maxAttempts, Date.now()],
       );
       const run = rowToRun(rows[0]!);
@@ -263,7 +314,7 @@ export function createPostgresRunStore(connectionString: string, opts?: { maxCla
 
     async releaseLease(runId, leaseToken): Promise<boolean> {
       const { rowCount } = await q(
-        "UPDATE runs SET status='pending', lease_token=NULL, lease_expires_at=NULL, worker_id=NULL WHERE id=$1 AND lease_token=$2 AND status='running'",
+        "UPDATE runs SET status='pending', lease_token=NULL, lease_expires_at=NULL, worker_id=NULL WHERE id=$1 AND lease_token=$2 AND status='running' RETURNING pg_notify('qm_run_available', 'null')",
         [runId, leaseToken],
       );
       return rowCount > 0;
@@ -273,7 +324,7 @@ export function createPostgresRunStore(connectionString: string, opts?: { maxCla
       const { rowCount } = await q(
         `UPDATE runs SET status='done', result=$1, lease_token=NULL, lease_expires_at=NULL, finished_at=$2,
            idempotency_key = CASE WHEN $5 THEN NULL ELSE idempotency_key END
-         WHERE id=$3 AND lease_token=$4`,
+         WHERE id=$3 AND lease_token=$4 RETURNING pg_notify('qm_run_available', 'null')`,
         [JSON.stringify(result), Date.now(), runId, leaseToken, releasesDedupKey(result)],
       );
       if (rowCount > 0) {
@@ -429,6 +480,11 @@ export function createPostgresRunStore(connectionString: string, opts?: { maxCla
     },
 
     async close(): Promise<void> {
+      availabilityClosed = true;
+      clearTimeout(availabilityTimer);
+      availabilityListeners.clear();
+      await availabilityProbe;
+      await available.close?.();
       await closePool();
     },
   };
