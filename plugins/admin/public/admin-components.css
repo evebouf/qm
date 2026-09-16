@@ -1415,7 +1415,7 @@ dialog.credential-dialog {
   padding: 6px 32px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--subtle);
+  background: transparent;
   color: var(--text);
   font-size: 13px;
   font-weight: 400;
@@ -1423,7 +1423,7 @@ dialog.credential-dialog {
   box-shadow: none;
 }
 :where(html[data-admin-variant="1"]) #app-view #main .admin-search input:focus {
-  background: var(--bg);
+  background: transparent;
   border-color: var(--cta);
 }
 :where(html[data-admin-variant="1"]) #app-view #main .admin-search input::placeholder {
@@ -1970,4 +1970,39 @@ dialog.credential-dialog {
 }
 #view-design .design-group {
   scroll-margin-top: 80px;
+}
+
+:where(html[data-admin-variant="1"]) #app-view #main #shellbar:has(.shell-back-row) {
+  flex-wrap: wrap;
+}
+:where(html[data-admin-variant="1"]) #app-view #main #shellbar .shell-back-row {
+  display: flex;
+  flex: 0 0 100%;
+}
+:where(html[data-admin-variant="1"]) #app-view #main #shellbar .shell-back-row:empty {
+  display: none;
+}
+:where(html[data-admin-variant="1"]) #app-view #main #shellbar .back {
+  flex: 0 0 auto;
+  width: fit-content;
+  min-height: 28px;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+  text-decoration: none;
+}
+:where(html[data-admin-variant="1"]) #app-view #main #shellbar .back:hover {
+  background: transparent;
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+:where(html[data-admin-variant="1"]) #app-view #main #shellbar .back:focus-visible {
+  outline: 2px solid var(--cta);
+  outline-offset: 3px;
 }

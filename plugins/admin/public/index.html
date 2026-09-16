@@ -11,6 +11,7 @@
         --bg: #fbfbfa;
         --surface: #ffffff;
         --subtle: #f4f5f4;
+        --sidebar-active: oklch(0.97 0 0);
         --text: #18181b;
         --muted: #667085;
         --border: #e4e7ec;
@@ -73,6 +74,7 @@
         --bg: oklch(0.165 0.022 250);
         --surface: oklch(0.205 0.024 250);
         --subtle: oklch(0.245 0.024 250);
+        --sidebar-active: oklch(0.245 0.024 250);
         --text: oklch(0.975 0.005 250);
         --muted: oklch(0.72 0.021 250);
         --border: oklch(0.275 0.024 250);
@@ -6124,12 +6126,13 @@
         right: calc(100% + 12px);
         top: 50%;
         transform: translateY(-50%);
-        padding: 6px 8px;
-        border-radius: 6px;
-        background: var(--bg);
-        color: var(--muted);
+        padding: 6px 12px;
+        border: 1px solid #93c5fd;
+        border-radius: 999px;
+        background: #dbeafe;
+        color: #1e40af;
         font-size: 12px;
-        font-weight: 400;
+        font-weight: 500;
         white-space: nowrap;
       }
       body[data-preview-seed="true"] .admin-seed-data-note {
@@ -6468,6 +6471,17 @@
           border-top: 1px solid var(--border);
           border-radius: 0;
         }
+      }
+      :where(html[data-admin-variant="1"]) nav.tabs .tab {
+        border-radius: 8px;
+        transition: background 0.12s ease;
+      }
+      :where(html[data-admin-variant="1"]) nav.tabs .tab:not(:disabled):hover,
+      :where(html[data-admin-variant="1"]) nav.tabs .tab.active {
+        color: var(--text);
+        background: color-mix(in srgb, var(--text) 4%, transparent);
+        box-shadow: none;
+        font-weight: 400;
       }
     </style>
     <style data-admin-components></style>
@@ -9439,7 +9453,12 @@
           b.className = "back";
           b.textContent = opts.back.label;
           b.onclick = opts.back.onClick;
-          bar.appendChild(b);
+          if (adminVariant === "1") {
+            const row = document.createElement("div");
+            row.className = "shell-back-row";
+            row.appendChild(b);
+            bar.appendChild(row);
+          } else bar.appendChild(b);
         }
         if (opts.title) {
           const h = document.createElement("h1");
@@ -11978,7 +11997,7 @@
           ),
           designSection(
             "Search",
-            "A quiet search icon, compact field, and clear action. Focus uses the shared dark blue accent.",
+            "A transparent background, subtle border, search icon, and clear action. Focus uses the shared dark blue accent.",
             [
               designSpec(
                 "Search field",
