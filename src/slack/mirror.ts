@@ -1,5 +1,5 @@
 import { swallow } from "../util/errors.ts";
-import { decodeSlackEntities, mentionsBot, resolveMentionsInText } from "./lib.ts";
+import { decodeSlackEntities, mentionsBot } from "./lib.ts";
 import { messageWithForwardedContent } from "./forwards.ts";
 import type { SlackCoreClient } from "../api/slack-core-client.ts";
 import type { IngestEvent } from "../surface-cache/surface-cache.ts";
@@ -9,7 +9,6 @@ import { MAX_NAME_LOOKUPS } from "./conversation-view.ts";
 
 export interface Mirror {
   pushSurfaceEvents(events: IngestEvent[]): Promise<void>;
-  resolveTextMentions(client: any, text: string): Promise<{ text: string; mentions: Record<string, string> }>;
   mirrorMessageEvent(
     m: Partial<SlackMessageEvent>,
     client: any,
@@ -83,10 +82,7 @@ export function createMirror(deps: {
     await core.ingestSurfaceEvents(events, { name: ids.botHandle, mentionId: ids.botUserId });
   }
 
-  async function resolveTextMentions(
-    client: any,
-    text: string,
-  ): Promise<{ text: string; mentions: Record<string, string> }> {
+  async function resolveMentionNames(client: any, text: string): Promise<Record<string, string>> {
     const mentionIds = new Set<string>();
     for (const match of text.matchAll(/<@(U\w+)(?:\|[^>]*)?>/g)) mentionIds.add(match[1] as string);
     const names = new Map<string, string>();
@@ -100,7 +96,7 @@ export function createMirror(deps: {
         }
       }),
     );
-    return { text: resolveMentionsInText(text, (id) => names.get(id)), mentions: Object.fromEntries(names) };
+    return Object.fromEntries(names);
   }
 
   async function mirrorMessageEvent(
@@ -138,9 +134,9 @@ export function createMirror(deps: {
     }
     const content = messageWithForwardedContent(m);
     const raw = content.text;
-    const { text, mentions } = await resolveTextMentions(client, decodeSlackEntities(raw));
-    await pushSurfaceEvents([slackMessageToIngestEvent(m, ids, { ...opts, text, mentions, kind })]);
+    const mentions = await resolveMentionNames(client, decodeSlackEntities(raw));
+    await pushSurfaceEvents([slackMessageToIngestEvent(m, ids, { ...opts, mentions, kind })]);
   }
 
-  return { pushSurfaceEvents, resolveTextMentions, mirrorMessageEvent };
+  return { pushSurfaceEvents, mirrorMessageEvent };
 }
