@@ -2072,3 +2072,65 @@ dialog.credential-dialog {
     min-height: 44px;
   }
 }
+
+:where(html[data-admin-variant="1"]) #who {
+  gap: 16px;
+}
+:where(html[data-admin-variant="1"]) #who .account-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+  gap: 2px;
+  line-height: 1.3;
+}
+:where(html[data-admin-variant="1"]) #who #who-name {
+  display: block;
+  order: -1;
+  max-width: 220px;
+  font-size: 13px;
+  font-weight: 400;
+}
+:where(html[data-admin-variant="1"]) #who #org-tag {
+  display: block;
+  max-width: 220px;
+  font-size: 11px;
+}
+:where(html[data-admin-variant="1"]) #who #org-tag::before {
+  content: "Organization · ";
+}
+:where(html[data-admin-variant="1"]) #who #signout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.3;
+  text-decoration: none;
+  white-space: nowrap;
+}
+:where(html[data-admin-variant="1"]) #who #signout:hover {
+  color: var(--text);
+  background: var(--subtle);
+}
+:where(html[data-admin-variant="1"]) #who #signout:focus-visible {
+  outline: 2px solid var(--cta);
+  outline-offset: 2px;
+}
+@media (max-width: 560px) {
+  :where(html[data-admin-variant="1"]) #who {
+    gap: 8px;
+  }
+  :where(html[data-admin-variant="1"]) #who :is(#who-name, #org-tag) {
+    max-width: 28vw;
+  }
+  :where(html[data-admin-variant="1"]) #who #signout {
+    min-height: 44px;
+  }
+}

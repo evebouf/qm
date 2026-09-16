@@ -278,6 +278,9 @@
         accent-color: var(--ink);
         cursor: pointer;
       }
+      .account-identity {
+        display: contents;
+      }
       .who {
         display: flex;
         align-items: center;
@@ -6506,8 +6509,8 @@
       </a>
       <div class="header-controls" id="header-controls" aria-label="Page controls"></div>
       <div class="who hidden" id="who">
-        <span id="org-tag"></span><span class="pill" id="who-name"></span
-        ><button class="link" id="signout">Sign out</button>
+        <span class="account-identity"><span id="org-tag"></span><span class="pill" id="who-name"></span></span>
+        <button class="link" id="signout" type="button">Sign out</button>
       </div>
     </header>
 
@@ -8943,6 +8946,8 @@
           return showView("signin-view", "Sign in through the portal to continue.");
         }
         $("org-tag").textContent = me.data.org;
+        $("org-tag").title = "Organization: " + me.data.org;
+        $("who-name").title = "Signed in as " + me.data.principal;
         orgId = me.data.org;
         $("who-name").textContent = me.data.principal;
         if (me.data.isAdmin === false) {
@@ -20308,7 +20313,7 @@
                   },
                 }),
             title: index ? VIEW_TITLE.files : shortName(scope),
-            count: files.length ? plural(files.length, "file") + (capped ? ", newest shown" : "") : "",
+            count: files.length ? plural(files.length, "file") : "",
           },
           placeholder: index ? "Search all files…" : "Search files…",
         });
