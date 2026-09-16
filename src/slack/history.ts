@@ -83,21 +83,28 @@ export function createSlackHistoryReader(deps: {
     threadTs?: string,
     before?: string,
     expandThreads = false,
-  ): Promise<CachedMessage[]> {
+  ): Promise<{ rows: CachedMessage[]; hasMore: boolean; truncatedExpansions?: number }> {
     const read = deps.core.readSurfaceMessages!;
-    const options = { limit: 200, noFallback: true, ...(before ? { before } : {}) };
+    const options = { limit: 201, noFallback: true, ...(before ? { before } : {}) };
     if (threadTs) {
       const [parents, replies] = await Promise.all([
         read(channel, { at: threadTs, noFallback: true, ...(before ? { before } : {}) }),
-        read(channel, { ...options, sub: threadTs }),
+        read(channel, { ...options, sub: threadTs, oldestFirst: true }),
       ]);
-      return [...parents, ...replies.slice(-(200 - parents.length))];
+      const rows = [...parents, ...replies];
+      return { rows: rows.slice(0, 200), hasMore: rows.length > 200 };
     }
-    const roots = await read(channel, { ...options, channelHistory: true });
-    if (!expandThreads) return roots;
+    const rootPage = await read(channel, { ...options, channelHistory: true });
+    const roots = rootPage.slice(-200);
+    const hasMore = rootPage.length > 200;
+    if (!expandThreads) return { rows: roots, hasMore };
     const parents = roots.filter((m) => (m.replyCount ?? 0) > 0).slice(-5);
     const expanded = await Promise.all(parents.map((m) => mirrorHistory(channel, m.ts)));
-    return [...new Map([...roots, ...expanded.flat()].map((m) => [m.ts, m])).values()];
+    return {
+      rows: [...new Map([...roots, ...expanded.flatMap((page) => page.rows)].map((m) => [m.ts, m])).values()],
+      hasMore,
+      truncatedExpansions: expanded.filter((page) => page.hasMore).length,
+    };
   }
 
   async function compareShadow(
@@ -109,7 +116,8 @@ export function createSlackHistoryReader(deps: {
   ): Promise<void> {
     if (!deps.core.readSurfaceMessages) return;
     try {
-      const rows = await mirrorHistory(channel, threadTs, before, expandThreads);
+      const mirrorPage = await mirrorHistory(channel, threadTs, before, expandThreads);
+      const rows = mirrorPage.rows;
       const timestamps = new Set(rows.map((m) => m.ts));
       const liveTimestamps = new Set(live.raw.flatMap((m) => (m.ts ? [m.ts] : [])));
       const ids = [...liveTimestamps];
@@ -164,6 +172,8 @@ export function createSlackHistoryReader(deps: {
           staleEditedMessages,
           liveMessages: liveTimestamps.size,
           mirroredMessages: timestamps.size,
+          mirrorHasMore: mirrorPage.hasMore,
+          mirrorTruncatedExpansions: mirrorPage.truncatedExpansions ?? 0,
           storedMessages,
           matchingMessages,
           textMismatches,
@@ -203,7 +213,8 @@ export function createSlackHistoryReader(deps: {
     const deleted = new Set<string>();
     if (deps.core.readSurfaceMessages) {
       try {
-        const rows = await mirrorHistory(channel, threadTs, before, expandThreads);
+        const mirrorPage = await mirrorHistory(channel, threadTs, before, expandThreads);
+        const rows = mirrorPage.rows;
         mirrored = rows
           .filter((m) => !m.deleted && (!before || m.ts < before))
           .map((m) => ({
@@ -220,7 +231,14 @@ export function createSlackHistoryReader(deps: {
               : {}),
           }));
         if (mirrored.length && (!threadTs || rows.some((m) => m.ts === threadTs) || before)) {
-          return { raw: mirrored, hasMore: rows.length >= 200, note: MIRROR_CONTEXT_NOTE };
+          return {
+            raw: mirrored,
+            hasMore: mirrorPage.hasMore,
+            ...(mirrorPage.truncatedExpansions !== undefined
+              ? { truncatedExpansions: mirrorPage.truncatedExpansions }
+              : {}),
+            note: MIRROR_CONTEXT_NOTE,
+          };
         }
       } catch (error) {
         swallow("slack: mirror context read", error);
