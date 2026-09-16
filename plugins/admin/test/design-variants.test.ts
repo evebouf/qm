@@ -22,6 +22,7 @@ function initialize(search: string) {
     },
   }));
   const document = {
+    body: { dataset: {} as Record<string, string>, classList: { contains: () => false } },
     documentElement: { dataset: {} as Record<string, string> },
     querySelectorAll(selector: string) {
       if (selector === "[data-admin-design]") return links;

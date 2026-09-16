@@ -221,8 +221,27 @@
         line-height: 1;
       }
       .header-home {
+        display: inline-flex;
+        align-items: center;
         flex: 0 0 auto;
+        gap: 6px;
         margin-right: auto;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 400;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .header-home:hover {
+        color: var(--text);
+      }
+      .header-home:focus-visible {
+        outline: 2px solid var(--text);
+        outline-offset: 4px;
+        border-radius: 2px;
       }
       .header-controls {
         display: flex;
@@ -531,6 +550,7 @@
         min-height: 0;
         overflow-x: hidden;
         overflow-y: auto;
+        overscroll-behavior-y: contain;
         scrollbar-width: none;
         max-width: 100%;
         padding: 0;
@@ -627,7 +647,7 @@
       }
       :where(html[data-admin-variant="1"]) nav.tabs .tab-section {
         margin-top: 8px;
-        border-top: 0;
+        border-top: 1px solid var(--border);
       }
       nav.tabs .tab-section:first-child {
         margin-top: 0;
@@ -734,6 +754,7 @@
         margin: 0 0 6px;
       }
       input[type="text"],
+      :where(html[data-admin-variant="1"]) input[type="url"],
       input[type="email"],
       input[type="date"],
       input:not([type]),
@@ -1130,6 +1151,16 @@
         color: var(--ok);
         border-color: rgba(22, 114, 58, 0.35);
         background: rgba(22, 114, 58, 0.07);
+      }
+      :where(html[data-admin-variant="1"]) .badge.ok {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-color: color-mix(in srgb, var(--ok) 16%, transparent);
+        background: color-mix(in srgb, var(--ok) 6%, transparent);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.4;
       }
       .badge.err {
         color: var(--danger);
@@ -4294,10 +4325,6 @@
       body:has(#app-view.hidden) header.top {
         display: none;
       }
-      .header-home {
-        flex: 0 0 auto;
-        margin-right: auto;
-      }
       .who {
         margin-left: auto;
       }
@@ -4320,17 +4347,6 @@
         }
         :where(html[data-admin-variant="1"]) .admin-sidebar nav.tabs {
           padding-right: 6px;
-          scrollbar-width: thin;
-          scrollbar-color: color-mix(in srgb, var(--text) 12%, transparent) transparent;
-          scrollbar-gutter: stable;
-        }
-        :where(html[data-admin-variant="1"]) .admin-sidebar nav.tabs::-webkit-scrollbar {
-          display: block;
-          width: 6px;
-        }
-        :where(html[data-admin-variant="1"]) .admin-sidebar nav.tabs::-webkit-scrollbar-thumb {
-          border-radius: 8px;
-          background: color-mix(in srgb, var(--text) 12%, transparent);
         }
       }
       .brand {
@@ -4453,7 +4469,7 @@
       }
       :where(html[data-admin-variant="1"]) nav.tabs .tab-section {
         margin-top: 8px;
-        border-top: 0;
+        border-top: 1px solid var(--border);
       }
       nav.tabs .tab-section:first-child {
         margin-top: 0;
@@ -4493,6 +4509,7 @@
         letter-spacing: -0.025em;
       }
       :where(html[data-admin-variant="1"]) .admin-main input[type="text"],
+      :where(html[data-admin-variant="1"]) .admin-main input[type="url"],
       :where(html[data-admin-variant="1"]) .admin-main textarea,
       :where(html[data-admin-variant="1"]) .admin-main select,
       :where(html[data-admin-variant="1"]) .admin-main .dd > button {
@@ -4795,11 +4812,6 @@
           column-gap: 8px;
         }
       }
-      :where(html[data-admin-variant="1"])
-        body:is([data-subview="governance"], [data-subview="models"], [data-subview="credentials"])
-        .admin-inner {
-        max-width: 1040px;
-      }
       :where(html[data-admin-variant="1"]) #view-governance .governance-field-grid {
         display: grid;
         grid-template-columns: 1fr;
@@ -4827,15 +4839,22 @@
         gap: 8px;
         margin-top: 8px;
       }
-      :where(html[data-admin-variant="1"]) #view-governance .card > .foot:has([data-save]),
-      :where(html[data-admin-variant="1"]) #view-governance .card > .foot:has(#governance-org-ambient-save) {
+      :where(html[data-admin-variant="1"]) #view-governance :is(.card, .parity-subsection) > .foot:has([data-save]),
+      :where(html[data-admin-variant="1"])
+        #view-governance
+        :is(.card, .parity-subsection)
+        > .foot:has(#governance-org-ambient-save) {
         min-height: 32px;
         margin-top: 12px;
         gap: 10px;
       }
-      :where(html[data-admin-variant="1"]) #view-governance .card > .foot [data-save],
-      :where(html[data-admin-variant="1"]) #view-governance .card > .foot #governance-org-ambient-save,
-      :where(html[data-admin-variant="1"]) #view-governance .card > .foot #sc-save {
+      :where(html[data-admin-variant="1"]) #view-governance :is(.card, .parity-subsection) > .foot [data-save],
+      :where(html[data-admin-variant="1"])
+        #view-governance
+        :is(.card, .parity-subsection)
+        > .foot
+        #governance-org-ambient-save,
+      :where(html[data-admin-variant="1"]) #view-governance :is(.card, .parity-subsection) > .foot #sc-save {
         flex: 0 0 auto;
         min-width: 76px;
         min-height: 32px;
@@ -4851,7 +4870,13 @@
         }
       }
       :where(html[data-admin-variant="1"])
-        body:is([data-subview="governance"], [data-subview="models"], [data-subview="credentials"])
+        body:is(
+          [data-subview="governance"],
+          [data-subview="models"],
+          [data-subview="credentials"],
+          [data-subview="connectors"],
+          [data-subview="customize"]
+        )
         .shell-title {
         font-weight: 500;
       }
@@ -4892,9 +4917,13 @@
         color: inherit;
         font-weight: 400;
       }
-      :where(html[data-admin-variant="1"]) #view-governance .card > .foot [data-save]:disabled,
-      :where(html[data-admin-variant="1"]) #view-governance .card > .foot #governance-org-ambient-save:disabled,
-      :where(html[data-admin-variant="1"]) #view-governance .card > .foot #sc-save:disabled {
+      :where(html[data-admin-variant="1"]) #view-governance :is(.card, .parity-subsection) > .foot [data-save]:disabled,
+      :where(html[data-admin-variant="1"])
+        #view-governance
+        :is(.card, .parity-subsection)
+        > .foot
+        #governance-org-ambient-save:disabled,
+      :where(html[data-admin-variant="1"]) #view-governance :is(.card, .parity-subsection) > .foot #sc-save:disabled {
         color: color-mix(in srgb, var(--text) 32%, var(--bg));
         background: color-mix(in srgb, var(--text) 3%, var(--bg));
         border: 1px solid color-mix(in srgb, var(--text) 8%, var(--bg));
@@ -4904,13 +4933,26 @@
         transform: none;
       }
       :where(html[data-admin-variant="1"])
-        body:is([data-subview="governance"], [data-subview="models"], [data-subview="credentials"])
+        body:is(
+          [data-subview="governance"],
+          [data-subview="models"],
+          [data-subview="credentials"],
+          [data-subview="connectors"],
+          [data-subview="customize"],
+          [data-subview="users"]
+        )
         .admin-inner {
         max-width: 960px;
         margin-inline: auto;
       }
       :where(html[data-admin-variant="1"])
-        body:is([data-subview="governance"], [data-subview="models"], [data-subview="credentials"])
+        body:is(
+          [data-subview="governance"],
+          [data-subview="models"],
+          [data-subview="credentials"],
+          [data-subview="connectors"],
+          [data-subview="customize"]
+        )
         .shellbar {
         margin-bottom: 16px;
       }
@@ -4945,11 +4987,11 @@
         grid-column: 2;
         min-width: 0;
       }
-      :where(html[data-admin-variant="1"]) #view-governance .card > .foot {
+      :where(html[data-admin-variant="1"]) #view-governance :is(.card, .parity-subsection) > .foot {
         grid-column: 2;
         justify-content: flex-end;
       }
-      :where(html[data-admin-variant="1"]) #view-governance .card > .foot[hidden] {
+      :where(html[data-admin-variant="1"]) #view-governance :is(.card, .parity-subsection) > .foot[hidden] {
         display: none;
       }
       :where(html[data-admin-variant="1"]) .screening-test-options {
@@ -5002,9 +5044,13 @@
         grid-column: 1 / -1;
         justify-self: end;
       }
-      :where(html[data-admin-variant="1"]) #view-governance .card > .foot [data-save],
-      :where(html[data-admin-variant="1"]) #view-governance .card > .foot #governance-org-ambient-save,
-      :where(html[data-admin-variant="1"]) #view-governance .card > .foot #sc-save {
+      :where(html[data-admin-variant="1"]) #view-governance :is(.card, .parity-subsection) > .foot [data-save],
+      :where(html[data-admin-variant="1"])
+        #view-governance
+        :is(.card, .parity-subsection)
+        > .foot
+        #governance-org-ambient-save,
+      :where(html[data-admin-variant="1"]) #view-governance :is(.card, .parity-subsection) > .foot #sc-save {
         order: 1;
         font-weight: 400;
       }
@@ -5055,7 +5101,7 @@
           grid-column: 1;
           margin-top: 12px;
         }
-        :where(html[data-admin-variant="1"]) #view-governance .card > .foot {
+        :where(html[data-admin-variant="1"]) #view-governance :is(.card, .parity-subsection) > .foot {
           grid-column: 1;
         }
         :where(html[data-admin-variant="1"]) #card-security-posture .body > .dd,
@@ -5253,19 +5299,43 @@
         margin: 0;
       }
       :where(html[data-admin-variant="1"])
-        body:is([data-subview="governance"], [data-subview="models"], [data-subview="credentials"])
+        body:is(
+          [data-subview="governance"],
+          [data-subview="models"],
+          [data-subview="credentials"],
+          [data-subview="connectors"],
+          [data-subview="customize"]
+        )
         #view-governance
         input:not([type="radio"]):not([type="checkbox"]),
       :where(html[data-admin-variant="1"])
-        body:is([data-subview="governance"], [data-subview="models"], [data-subview="credentials"])
+        body:is(
+          [data-subview="governance"],
+          [data-subview="models"],
+          [data-subview="credentials"],
+          [data-subview="connectors"],
+          [data-subview="customize"]
+        )
         #view-governance
         select,
       :where(html[data-admin-variant="1"])
-        body:is([data-subview="governance"], [data-subview="models"], [data-subview="credentials"])
+        body:is(
+          [data-subview="governance"],
+          [data-subview="models"],
+          [data-subview="credentials"],
+          [data-subview="connectors"],
+          [data-subview="customize"]
+        )
         #view-governance
         textarea,
       :where(html[data-admin-variant="1"])
-        body:is([data-subview="governance"], [data-subview="models"], [data-subview="credentials"])
+        body:is(
+          [data-subview="governance"],
+          [data-subview="models"],
+          [data-subview="credentials"],
+          [data-subview="connectors"],
+          [data-subview="customize"]
+        )
         #view-governance
         .dd
         > button {
@@ -5477,11 +5547,11 @@
       :where(html[data-admin-variant="1"]) #view-governance #base-fast-mode-control {
         margin-top: 16px;
       }
-      :where(html[data-admin-variant="1"]) #base-fast-mode-control input:checked + .setting-switch {
+      :where(html[data-admin-variant="1"]) #view-governance .setting-toggle input:checked + .setting-switch {
         border-color: var(--cta);
         background: var(--cta);
       }
-      :where(html[data-admin-variant="1"]) #base-fast-mode-control input:focus-visible + .setting-switch {
+      :where(html[data-admin-variant="1"]) #view-governance .setting-toggle input:focus-visible + .setting-switch {
         outline-color: var(--cta);
       }
       :where(html[data-admin-variant="1"]) #view-governance #base-fast-mode-control strong,
@@ -5649,10 +5719,231 @@
       body[data-subview="connectors"] .shellbar {
         display: none;
       }
+      :where(html[data-admin-variant="1"]) #slack-installation-create {
+        color: #2563b8;
+        text-decoration: underline;
+        text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
+        text-underline-offset: 0.2em;
+      }
+      :where(html.dark[data-admin-variant="1"]) #slack-installation-create {
+        color: #4c8edb;
+      }
+      :where(html[data-admin-variant="1"]) #slack-installation-create:is(:hover, :focus-visible) {
+        text-decoration-color: currentColor;
+      }
+      :where(html[data-admin-variant="1"]) #slack-installation-create:focus-visible {
+        outline: 2px solid currentColor;
+        outline-offset: 3px;
+        border-radius: 2px;
+      }
       .connector-dm-tip {
         margin: 0 0 10px;
         color: var(--muted);
         font-size: 12.5px;
+      }
+      .connector-dm-tip p {
+        margin: 0;
+      }
+      :where(html[data-admin-variant="1"]) body[data-subview="connectors"] .shellbar {
+        display: flex;
+      }
+      :where(html[data-admin-variant="1"]) #view-connectors {
+        overflow: visible;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+      :where(html[data-admin-variant="1"]) #view-connectors section.card {
+        padding: 24px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      :where(html[data-admin-variant="1"]) #view-connectors section.card:last-child {
+        border-bottom: 0;
+      }
+      :where(html[data-admin-variant="1"]) #view-connectors .card > .head {
+        margin: 0 0 16px;
+        padding: 0;
+        border: 0;
+      }
+      :where(html[data-admin-variant="1"]) #view-connectors .card > .head h2 {
+        font-size: 14px;
+        font-weight: 500;
+      }
+      :where(html[data-admin-variant="1"]) #view-connectors .card > .head p,
+      :where(html[data-admin-variant="1"]) #view-connectors .hint,
+      :where(html[data-admin-variant="1"]) .connector-dm-tip {
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 400;
+        line-height: 1.4;
+      }
+      :where(html[data-admin-variant="1"]) .admin-notice {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 14px 16px;
+        border: 1px solid color-mix(in srgb, #7095c0 20%, white);
+        border-radius: 8px;
+        background: color-mix(in srgb, #7095c0 6%, white);
+        color: var(--cta);
+        font-size: 13px;
+        font-weight: 400;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+      }
+      :where(html[data-admin-variant="1"]) .admin-notice--warning {
+        border-color: #f2dfa2;
+        background: #fffbeb;
+        color: #854d0e;
+      }
+      :where(html[data-admin-variant="1"]) .admin-notice::before {
+        content: "";
+        display: block;
+        flex: 0 0 18px;
+        width: 18px;
+        height: 18px;
+        margin-top: 1px;
+        border-radius: 0;
+        color: inherit;
+        background: currentColor;
+        mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 11v5M12 8h.01'/%3E%3C/svg%3E")
+          center / contain no-repeat;
+      }
+      :where(html[data-admin-variant="1"]) .admin-notice > div,
+      :where(html[data-admin-variant="1"]) .admin-notice > p {
+        flex: 1;
+        min-width: 0;
+      }
+      :where(html[data-admin-variant="1"]) .admin-notice p,
+      :where(html[data-admin-variant="1"]) .admin-notice span,
+      :where(html[data-admin-variant="1"]) .admin-notice strong {
+        margin: 0;
+        color: inherit;
+        font-size: inherit;
+        line-height: inherit;
+      }
+      :where(html[data-admin-variant="1"]) .admin-notice strong {
+        display: block;
+        margin-bottom: 4px;
+        font-weight: 600;
+      }
+      :where(html[data-admin-variant="1"]) .connector-dm-tip {
+        margin-bottom: 16px;
+      }
+      :where(html[data-admin-variant="1"]) #view-connectors .card > .head p {
+        margin: 4px 0 0;
+        max-width: 70ch;
+      }
+      :where(html[data-admin-variant="1"]) #view-connectors .card > .foot {
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      :where(html[data-admin-variant="1"]) #view-connectors .credential-title strong {
+        font-size: 13px;
+        font-weight: 500;
+      }
+      :where(html[data-admin-variant="1"]) #view-connectors .credential-row {
+        padding: 12px 0;
+        border-color: color-mix(in srgb, var(--text) 8%, var(--bg));
+      }
+      :where(html[data-admin-variant="1"]) #view-governance .sv-customize > .head {
+        row-gap: 0;
+      }
+      :where(html[data-admin-variant="1"]) #view-governance .sv-customize .body label:not(.setting-toggle) {
+        margin-bottom: 4px;
+        font-size: 13px;
+        font-weight: 400;
+      }
+      :where(html[data-admin-variant="1"])
+        #view-governance
+        .sv-customize
+        .body
+        input:not([type="checkbox"]):not([type="radio"]) {
+        max-width: none !important;
+        min-height: 34px;
+        padding: 7px 10px;
+        background: transparent;
+        font: inherit;
+      }
+      :where(html[data-admin-variant="1"]) #view-governance .sv-customize .setting-toggle {
+        align-items: flex-start;
+      }
+      :where(html[data-admin-variant="1"]) #view-governance .sv-customize .setting-switch {
+        margin-top: 1px;
+      }
+      :where(html[data-admin-variant="1"]) #view-governance .sv-customize .setting-copy strong,
+      :where(html[data-admin-variant="1"]) #view-governance .sv-customize .setting-copy small {
+        font-size: 13px;
+        font-weight: 400;
+        line-height: 1.4;
+      }
+      :where(html[data-admin-variant="1"]) #view-governance .sv-customize .setting-copy small {
+        margin-top: 4px;
+      }
+      :where(html[data-admin-variant="1"]) #view-governance .parity-subsection {
+        display: block;
+        min-height: 0;
+        padding: 16px 0;
+        border-top: 1px solid var(--border);
+      }
+      :where(html[data-admin-variant="1"]) #view-governance .parity-subsection:first-child {
+        padding-top: 0;
+        border-top: 0;
+      }
+      :where(html[data-admin-variant="1"]) #view-governance .parity-subsection:last-child {
+        padding-bottom: 0;
+      }
+      :where(html[data-admin-variant="1"]) #view-governance :is(.card, .parity-subsection) > .foot .status {
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .soul-preview-label {
+        display: none;
+      }
+      :where(html[data-admin-variant="1"]) .soul-preview-label {
+        display: block;
+        margin-bottom: 4px;
+      }
+      :where(html[data-admin-variant="1"]) #card-soul.is-editing .soul-preview-body {
+        display: none;
+      }
+      :where(html[data-admin-variant="1"]) #view-governance #card-soul .soul-preview,
+      :where(html[data-admin-variant="1"]) #view-governance .soul-workbench textarea {
+        width: 100%;
+        min-height: 140px;
+        max-height: 360px;
+        margin: 0;
+        overflow: auto;
+        padding: 7px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      :where(html[data-admin-variant="1"]) #view-governance .soul-meta {
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      :where(html[data-admin-variant="1"]) #view-governance .soul-diff {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      :where(html[data-admin-variant="1"]) #view-governance .soul-diff h3,
+      :where(html[data-admin-variant="1"]) #view-governance .soul-history h3 {
+        margin: 0 0 4px;
+        color: var(--text);
+        font-size: 13px;
+        font-weight: 400;
+      }
+      :where(html[data-admin-variant="1"]) #view-governance .soul-diff pre {
+        padding: 7px 10px;
+        border-radius: 6px;
+        background: transparent;
+        font: inherit;
       }
       #card-soul:not(.is-editing) .soul-workbench {
         display: none;
@@ -5827,6 +6118,23 @@
           system-ui,
           sans-serif;
       }
+      .admin-seed-data-note {
+        display: none;
+        position: absolute;
+        right: calc(100% + 12px);
+        top: 50%;
+        transform: translateY(-50%);
+        padding: 6px 8px;
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 400;
+        white-space: nowrap;
+      }
+      body[data-preview-seed="true"] .admin-seed-data-note {
+        display: block;
+      }
       .admin-variant-toggle a {
         display: block;
         padding: 10px 20px;
@@ -5864,11 +6172,324 @@
           min-width: 86px;
         }
       }
+
+      #view-data .users-layout section.card {
+        margin: 0;
+        padding: 24px 0;
+        border: 0;
+        border-bottom: 1px solid var(--border);
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+      #view-data .users-layout > section.card:last-child {
+        border-bottom: 0;
+      }
+      #view-data .users-layout .card > .head {
+        margin: 0 0 16px;
+        padding: 0;
+        border: 0;
+      }
+      #view-data .users-layout .card > .head h2 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 500;
+      }
+      #view-data .users-layout .card > .head p {
+        max-width: 70ch;
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      #view-data .users-layout .card > .body {
+        padding: 0;
+        min-width: 0;
+      }
+      #view-data .users-layout .users-setting {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 32px;
+      }
+      #view-data .users-layout .users-setting > .head {
+        margin: 0;
+      }
+      #view-data .users-layout .users-roster > .head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        column-gap: 16px;
+      }
+      #view-data .users-layout .users-roster > .head p {
+        grid-column: 1;
+      }
+      #view-data .users-layout .users-roster > .head button {
+        grid-column: 2;
+        grid-row: 1 / 3;
+        align-self: start;
+      }
+      #view-data .users-layout .status:empty {
+        display: none;
+      }
+      #view-data .users-layout .empty {
+        padding: 12px 0;
+        text-align: left;
+      }
+      #view-data .users-layout .grant-form .grow {
+        min-width: min(220px, 100%);
+      }
+      body:has(.users-layout) .shell-search input {
+        width: 240px;
+        max-width: 100%;
+        padding: 7px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        font-size: 13px;
+      }
+      @media (max-width: 720px) {
+        #view-data .users-layout .users-setting {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 16px;
+        }
+        #view-data .users-layout .users-roster > .head {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          align-items: flex-start;
+        }
+      }
+      :where(html[data-admin-variant="1"]) #app-view #shellbar .judgment-filters .shell-tab {
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 6px 14px;
+        background: transparent;
+        color: var(--muted);
+      }
+      :where(html[data-admin-variant="1"]) #app-view #shellbar .judgment-filters .shell-tab:hover {
+        background: var(--subtle);
+        color: var(--text);
+      }
+      :where(html[data-admin-variant="1"]) #app-view #shellbar .judgment-filters .shell-tab.active,
+      :where(html[data-admin-variant="1"]) #app-view #shellbar .judgment-filters .shell-tab.active:hover {
+        border-color: #0a2540;
+        background: #0a2540;
+        color: #fff;
+      }
+
+      #app-view #shellbar.logs-shell {
+        flex-wrap: wrap;
+        gap: 12px;
+        overflow: visible;
+      }
+      #app-view #shellbar.logs-shell .log-counts,
+      #app-view #shellbar.logs-shell .shell-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+      }
+      #app-view #shellbar.logs-shell .log-counts:empty {
+        display: none;
+      }
+      #app-view #shellbar.logs-shell .shell-tab {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 32px;
+        box-sizing: border-box;
+        padding: 6px 14px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 12.5px;
+        font-weight: 500;
+        line-height: 18px;
+        white-space: nowrap;
+      }
+      #app-view #shellbar.logs-shell .log-count {
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 400;
+        line-height: 18px;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      #app-view #shellbar.logs-shell .log-counts {
+        gap: 6px 16px;
+      }
+      #app-view #shellbar.logs-shell .shell-tab:hover {
+        background: var(--subtle);
+        color: var(--text);
+      }
+      #app-view #shellbar.logs-shell .shell-tab.active,
+      #app-view #shellbar.logs-shell .shell-tab.active:hover {
+        background: #0a2540;
+        border-color: #0a2540;
+        color: #fff;
+      }
+      @media (max-width: 720px) {
+        #app-view #shellbar.logs-shell .log-counts {
+          flex: 1 0 100%;
+          order: 1;
+        }
+        #app-view #shellbar.logs-shell .shell-spacer {
+          display: none;
+        }
+      }
+
+      #view-data .memory-notebooks {
+        padding-top: 8px;
+      }
+      #view-data .memory-notebooks .memory-columns,
+      #view-data .memory-notebooks .dense-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 100px 180px;
+        align-items: center;
+        gap: 24px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border);
+        background: transparent;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      #view-data .memory-notebooks .memory-columns {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      #view-data .memory-notebooks .memory-columns > :not(:first-child) {
+        text-align: right;
+      }
+      #view-data .memory-notebooks .dense-name {
+        min-width: 0;
+        max-width: none;
+        font-weight: 500;
+      }
+      #view-data .memory-notebooks .dense-preview,
+      #view-data .memory-notebooks .dense-time {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      #view-data .memory-notebooks .dense-row {
+        border-top: 0;
+      }
+      #view-data .memory-notebooks .dense-row:hover {
+        background: var(--subtle);
+      }
+      #view-data .memory-notebooks .dense-row:focus-visible {
+        outline: 2px solid var(--cta);
+        outline-offset: 2px;
+      }
+      #view-data section.memory-editor {
+        margin: 0;
+        padding: 24px 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+      }
+      #view-data .memory-editor > .head {
+        margin: 0 0 24px;
+        padding: 0;
+        border: 0;
+      }
+      #view-data .memory-editor h2 {
+        font-size: 14px;
+        font-weight: 500;
+      }
+      #view-data .memory-editor .head p {
+        margin: 4px 0 0;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      #view-data .memory-editor > .body {
+        padding: 0;
+      }
+      #view-data .memory-editor label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 13px;
+      }
+      #view-data .memory-editor textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 12px;
+        border-radius: 6px;
+        line-height: 1.6;
+        resize: vertical;
+      }
+      #view-data .memory-editor .foot {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 12px;
+        border: 0;
+        padding: 12px 0 0;
+      }
+      #view-data .memory-editor .status {
+        order: -1;
+        margin-right: auto;
+      }
+      #view-data .memory-editor button.primary {
+        min-height: 32px;
+        padding: 6px 14px;
+        border: 1px solid #0a2540;
+        border-radius: 6px;
+        background: #0a2540;
+        color: white;
+        font-size: 13px;
+      }
+      @media (max-width: 720px) {
+        #view-data .memory-notebooks .memory-columns,
+        #view-data .memory-notebooks .dense-row {
+          grid-template-columns: minmax(0, 1fr) 65px 110px;
+          gap: 10px;
+        }
+        #view-data .memory-notebooks .dense-name {
+          white-space: normal;
+          overflow-wrap: anywhere;
+        }
+        #view-data .memory-notebooks .dense-time {
+          white-space: normal;
+        }
+      }
+      @media (min-width: 901px) {
+        nav.tabs .tab.tab-footer:last-child {
+          margin-top: auto;
+          padding-top: 12px;
+          border-top: 1px solid var(--border);
+          border-radius: 0;
+        }
+      }
     </style>
+    <style data-admin-components></style>
   </head>
   <body>
     <header class="top">
-      <a class="header-button header-home" href="/" id="home-link">← Back to home</a>
+      <a class="header-home" href="/" id="home-link">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m12 19-7-7 7-7M5 12h14" />
+        </svg>
+        <span>Back to home</span>
+      </a>
       <div class="header-controls" id="header-controls" aria-label="Page controls"></div>
       <div class="who hidden" id="who">
         <span id="org-tag"></span><span class="pill" id="who-name"></span
@@ -6202,7 +6823,7 @@
           </div>
 
           <div id="view-governance">
-            <aside class="environment-notice hidden" id="environment-notice" role="status">
+            <aside class="environment-notice admin-notice hidden" id="environment-notice" role="status">
               <div>
                 <strong id="environment-notice-title"></strong>
                 <p id="environment-notice-detail"></p>
@@ -6416,7 +7037,12 @@
                       durable revision; restoring an older revision creates a new one.
                     </p>
                   </div>
-                  <div class="body"><p class="soul-preview" id="soul-preview">No saved instructions</p></div>
+                  <div class="body soul-preview-body">
+                    <div class="soul-preview-label" id="soul-preview-label">Standing instructions</div>
+                    <p class="soul-preview" id="soul-preview" aria-labelledby="soul-preview-label">
+                      No saved instructions
+                    </p>
+                  </div>
                   <div class="body soul-workbench">
                     <label for="soul">Standing instructions</label>
                     <textarea id="soul" maxlength="100000" placeholder="No scope-specific instructions"></textarea>
@@ -6547,7 +7173,11 @@
                     <h2>Egress policy</h2>
                   </div>
                   <div class="body">
-                    <div class="governance-capability" id="egress-capability" role="status">
+                    <div
+                      class="governance-capability admin-notice admin-notice--warning"
+                      id="egress-capability"
+                      role="status"
+                    >
                       <div>
                         <strong>Agent computer egress policy unavailable</strong
                         ><span
@@ -6711,6 +7341,7 @@
                 <section class="card sv-models hidden" id="card-base-model">
                   <div class="head">
                     <h2>Default runtime</h2>
+                    <p>The harness, model, and reasoning level used across your organization unless overridden.</p>
                   </div>
                   <div class="body">
                     <div class="model-runtime-fields">
@@ -7262,7 +7893,7 @@
       </div>
       <div class="review-dialog-body">
         <dl class="review-dialog-facts" id="governance-review-facts"></dl>
-        <p class="review-dialog-warning" id="governance-review-warning"></p>
+        <p class="review-dialog-warning admin-notice" id="governance-review-warning"></p>
       </div>
       <div class="review-dialog-foot">
         <button type="button" id="governance-review-cancel">Cancel</button
@@ -7454,6 +8085,7 @@
         </div></section
     ></template>
     <nav class="admin-variant-toggle" aria-label="Design variant">
+      <span class="admin-seed-data-note" title="This page includes development seed data.">Seed data</span>
       <a data-admin-design="original" href="?variant=original">Original</a>
       <a data-admin-design="1" href="?variant=1">Variant 1</a>
     </nav>
@@ -7466,7 +8098,22 @@
         }
         template.remove();
       });
+      const seededPreviewPages = new Set();
+      let seededPreviewDirectory = false;
+      function previewPageKey() {
+        const url = new URL(location.href);
+        url.searchParams.delete("variant");
+        return url.pathname + url.search;
+      }
+      function updatePreviewDataNote() {
+        document.body.dataset.previewSeed = String(
+          document.body.classList.contains("design-view") ||
+            seededPreviewPages.has(previewPageKey()) ||
+            (seededPreviewDirectory && document.body.dataset.subview === "history" && historyIsIndex()),
+        );
+      }
       function updateAdminVariantLinks() {
+        updatePreviewDataNote();
         document.querySelectorAll("[data-admin-design]").forEach((link) => {
           const url = new URL(location.href);
           url.searchParams.set("variant", link.dataset.adminDesign);
@@ -7497,9 +8144,18 @@
         anthropic: "Anthropic Messages",
       };
       const SECTIONS = [
-        { views: ["governance", "models", "credentials", "connectors", "customize", "users"] },
-        { label: "Logs", views: ["history", "slack", "judgments", "errors", "audit", "egress", "metrics"] },
-        { label: "Artifacts", views: ["files", "skills", "memory", "deployments", "crons", "retention"] },
+        {
+          views: ["governance", "models", "credentials", "connectors", "customize", "users"],
+        },
+        {
+          label: "Logs",
+          views: ["history", "slack", "judgments", "errors", "audit", "egress", "metrics"],
+        },
+        {
+          label: "Artifacts",
+          views: ["files", "skills", "memory", "deployments", "crons", "retention"],
+        },
+        { views: ["design-system"] },
       ];
 
       const VIEWS = [...SECTIONS.flatMap((s) => s.views), "onboarding", "user", "ackemoji", "keychain"];
@@ -7586,13 +8242,15 @@
         ].forEach((card) => content.appendChild(card));
 
         const connectorView = $("view-connectors");
-        const connectorTip = document.createElement("p");
-        connectorTip.className = "connector-dm-tip hidden";
+        const connectorTip = document.createElement("aside");
+        connectorTip.className = "connector-dm-tip admin-notice hidden";
         connectorTip.id = "connector-dm-tip";
-        connectorTip.textContent =
+        connectorTip.setAttribute("role", "note");
+        connectorTip.appendChild(document.createElement("p"));
+        connectorTip.querySelector("p").textContent =
           "Tip: the easiest way to change these settings is to ask " +
           ($("brand-product").textContent || "Agent") +
-          " in a DM — it can make the edit for you and confirm what changed.";
+          " in a DM. It can make the edit for you and confirm what changed.";
         connectorView.before(connectorTip);
         const builtIns = document.createElement("section");
         builtIns.className = "card";
@@ -7607,6 +8265,47 @@
       }
       prepareParityCards();
       const scAddButton = $("sc-add");
+      const scStatusHome = $("st-service-credentials").parentElement;
+      if (adminVariant === "1") {
+        const dialog = document.createElement("dialog");
+        dialog.id = "sc-dialog";
+        dialog.className = "custom-provider-dialog credential-dialog";
+        dialog.setAttribute("aria-labelledby", "sc-dialog-title");
+        dialog.setAttribute("aria-describedby", "sc-dialog-description");
+        dialog.innerHTML =
+          '<div class="project-dialog-head"><div><h2 id="sc-dialog-title">Add credential</h2><p id="sc-dialog-description">Connect a service securely, then choose what the agent can access.</p></div><button class="project-icon-button" type="button" id="sc-dialog-close" aria-label="Close credential dialog">×</button></div><div class="project-dialog-actions" id="sc-dialog-actions"></div>';
+        $("card-service-credentials").appendChild(dialog);
+        dialog.insertBefore($("sc-editor"), $("sc-dialog-actions"));
+        $("sc-dialog-actions").append($("sc-reset"), $("sc-save"));
+        const dismiss = () => {
+          if (!$("st-service-credentials").classList.contains("saving")) resetScForm();
+        };
+        $("sc-dialog-close").onclick = dismiss;
+        dialog.addEventListener("cancel", (event) => {
+          event.preventDefault();
+          dismiss();
+        });
+        dialog.addEventListener("click", (event) => {
+          const rect = dialog.getBoundingClientRect();
+          if (
+            event.target === dialog &&
+            (event.clientX < rect.left ||
+              event.clientX > rect.right ||
+              event.clientY < rect.top ||
+              event.clientY > rect.bottom)
+          )
+            dismiss();
+        });
+      }
+      function openScDialog() {
+        const dialog = $("sc-dialog");
+        if (!dialog) return;
+        $("sc-dialog-title").textContent = scEditing ? "Edit credential" : "Add credential";
+        setStatus("st-service-credentials", "", "");
+        $("sc-dialog-actions").prepend($("st-service-credentials"));
+        if (!dialog.open) dialog.showModal();
+      }
+
       let governanceOrgAmbientSaved = "on";
       document.querySelectorAll("[data-choice-for]").forEach((input) => {
         input.onchange = () => {
@@ -7668,7 +8367,7 @@
         slack: "Slack",
         judgments: "Judgments",
         ackemoji: "Ack emoji",
-        design: "Design library",
+        "design-system": "Design system",
       };
       const SCOPED = new Set([
         "governance",
@@ -7727,6 +8426,8 @@
       const API_BASE = "__ADMIN_BASE__";
 
       async function api(method, path, body) {
+        const previewPage = previewPageKey();
+        const previewView = view;
         const res = await fetch(API_BASE + path, {
           method,
           headers: body ? { "content-type": "application/json" } : {},
@@ -7737,6 +8438,15 @@
         try {
           data = text ? JSON.parse(text) : null;
         } catch {}
+        const directoryRead = path.split("?")[0] === "/api/scopes";
+        if (directoryRead) seededPreviewDirectory = !!data?.__previewSeed;
+        if (
+          data?.__previewSeed &&
+          (!directoryRead || (previewView === "history" && !urlToState().session && orgWideView()))
+        ) {
+          seededPreviewPages.add(previewPage);
+          updatePreviewDataNote();
+        }
         return { ok: res.ok, status: res.status, data };
       }
 
@@ -8296,6 +9006,7 @@
           s.views.forEach((v) => {
             const b = document.createElement("button");
             b.className = "tab" + (s.label ? "" : " tab-top") + (v === view ? " active" : "");
+            if (v === "design-system") b.classList.add("tab-footer");
             b.type = "button";
             b.appendChild(document.createTextNode(VIEW_TITLE[v] || v[0].toUpperCase() + v.slice(1)));
             if (v === view) b.setAttribute("aria-current", "page");
@@ -8379,7 +9090,7 @@
         }
         const raw = p.get("view") || fromPath;
 
-        const v = raw === "skill-packs" ? "skills" : raw;
+        const v = raw === "skill-packs" ? "skills" : raw === "design" ? "design-system" : raw;
         const session = pathSession || p.get("session") || null;
         const kindRaw = p.get("kind");
         const normalizedHistoryKind = ["conversation", "cron", "background"].includes(kindRaw)
@@ -8424,10 +9135,38 @@
         page = st.page || 1;
         historyKind = st.historyKind || "conversation";
         $("app-view").classList.toggle("history-view", view === "history");
+        $("app-view").classList.toggle("slack-view", view === "slack");
+        $("app-view").classList.toggle("judgments-view", view === "judgments");
+        $("app-view").classList.toggle("errors-view", view === "errors");
+        $("app-view").classList.toggle("deployments-view", view === "deployments");
+        $("app-view").classList.toggle("crons-view", view === "crons");
         $("app-view").classList.toggle("governance-view", isGovLike(view));
-        document.body.dataset.subview = isGovLike(view) ? view : view === "connectors" ? "connectors" : "";
+        document.body.dataset.subview = view;
+        document.body.dataset.adminKit = [
+          "crons",
+          "deployments",
+          "files",
+          "skills",
+          "memory",
+          "audit",
+          "egress",
+          "metrics",
+          "history",
+          "slack",
+          "judgments",
+          "errors",
+          "governance",
+          "models",
+          "credentials",
+          "connectors",
+          "customize",
+          "users",
+          "design-system",
+        ].includes(view)
+          ? "true"
+          : "false";
         document.body.classList.toggle("context-fullpage", view === "history" && !!st.session && st.turn != null);
-        document.body.classList.toggle("design-view", view === "design");
+        document.body.classList.toggle("design-view", view === "design-system");
         if (!isGovLike(view) && view !== "connectors" && view !== "onboarding" && !scopeDir) void loadScopeDirectory();
         defaultShell();
         renderTabs();
@@ -8435,17 +9174,17 @@
         $("view-onboarding").classList.toggle("hidden", view !== "onboarding");
         $("connector-dm-tip").classList.toggle("hidden", view !== "connectors");
         $("view-connectors").classList.toggle("hidden", view !== "connectors");
-        $("view-design").classList.toggle("hidden", view !== "design");
+        $("view-design").classList.toggle("hidden", view !== "design-system");
         $("view-data").classList.toggle(
           "hidden",
-          view === "onboarding" || isGovLike(view) || view === "connectors" || view === "design",
+          view === "onboarding" || isGovLike(view) || view === "connectors" || view === "design-system",
         );
         if (view === "onboarding") return void loadOnboarding();
         if (isGovLike(view)) {
           return void loadScope();
         }
         if (view === "connectors") return void loadConnectors();
-        if (view === "design") return void renderDesignLibrary();
+        if (view === "design-system") return void renderDesignLibrary();
         if (view === "user") return void showUserDetail(st.principal);
         if (view === "slack") return void renderSlackMirror(st);
         if (view === "judgments") return void renderAmbientJudgments(st);
@@ -8679,6 +9418,21 @@
       function pageShell(opts = {}) {
         const bar = $("shellbar");
         bar.textContent = "";
+        const logView =
+          adminVariant === "1" &&
+          ["history", "slack", "judgments", "errors", "audit", "egress", "metrics", "memory"].includes(view);
+        bar.classList.toggle("logs-shell", logView);
+        const counts = document.createElement("div");
+        counts.className = "log-counts";
+        const countText = (label, value) => {
+          const count = document.createElement("span");
+          count.className = "log-count";
+          const number = Number(value);
+          const noun = number === 1 ? label.replace(/s$/, "") : label;
+          count.textContent =
+            (Number.isFinite(number) ? number.toLocaleString() : String(value)) + " " + noun.toLowerCase();
+          return count;
+        };
         if (opts.back) {
           const b = document.createElement("button");
           b.type = "button";
@@ -8693,6 +9447,7 @@
           h.textContent = opts.title;
           bar.appendChild(h);
         }
+        if (logView) bar.appendChild(counts);
         if (opts.context) {
           const c = opts.contextGo ? navLink(opts.context, opts.contextGo) : document.createElement("span");
           c.classList.add("shell-context");
@@ -8701,39 +9456,80 @@
         }
         if (opts.tabs && opts.tabs.length) {
           const wrap = document.createElement("div");
-          wrap.className = "shell-tabs";
+          wrap.className = "shell-tabs" + (view === "judgments" ? " judgment-filters" : "");
           opts.tabs.forEach((tab) => {
             const b = document.createElement("button");
             b.type = "button";
             b.className = "shell-tab" + (tab.active ? " active" : "");
-            b.textContent = tab.count != null ? tab.label + " " + Number(tab.count).toLocaleString() : tab.label;
+            b.setAttribute("aria-pressed", String(!!tab.active));
+            if (logView) b.textContent = tab.label;
+            else b.textContent = tab.count != null ? tab.label + " " + Number(tab.count).toLocaleString() : tab.label;
             b.onclick = tab.onClick;
             wrap.appendChild(b);
           });
+          if (logView) {
+            const active = opts.tabs.find((tab) => tab.active);
+            if (active?.count != null) {
+              const noun =
+                view === "judgments" ? "judgments" : active.label === "Background" ? "background runs" : active.label;
+              counts.appendChild(countText(noun, active.count));
+            }
+          }
           bar.appendChild(wrap);
         } else if (opts.count != null && opts.count !== "") {
           const c = document.createElement("span");
           c.className = "shell-count";
           c.textContent = String(opts.count);
-          bar.appendChild(c);
+          if (logView) {
+            const match = String(opts.count).match(/^([\d,.]+\+?)\s*(.*)$/);
+            counts.appendChild(match ? countText(match[2] || "records", match[1].replaceAll(",", "")) : c);
+          } else bar.appendChild(c);
+        }
+        if (logView && opts.stats?.length) {
+          opts.stats.forEach(([value, label]) => counts.appendChild(countText(label, value)));
         }
         const spacer = document.createElement("span");
         spacer.className = "shell-spacer";
         bar.appendChild(spacer);
-        if (opts.stats && opts.stats.length) bar.appendChild(kpis(opts.stats, "shell-stats"));
+        if (!logView && opts.stats && opts.stats.length) bar.appendChild(kpis(opts.stats, "shell-stats"));
         if (opts.search) {
-          const w = document.createElement("div");
-          w.className = "shell-search";
-          const i = document.createElement("input");
-          i.type = "search";
-          i.placeholder = opts.search.placeholder || "Search…";
-          i.spellcheck = false;
-          i.setAttribute("autocapitalize", "none");
-          i.oninput = () => opts.search.onInput(i.value);
-          w.appendChild(i);
-          bar.appendChild(w);
+          bar.appendChild(searchField(opts.search));
         }
         (opts.actions || []).forEach((n) => bar.appendChild(n));
+      }
+      function searchField({ placeholder = "Search…", onInput = () => {}, value = "", disabled = false }) {
+        const wrap = document.createElement("div");
+        wrap.className = "shell-search admin-search";
+        const input = document.createElement("input");
+        input.type = "search";
+        input.placeholder = placeholder;
+        input.setAttribute("aria-label", placeholder.replace(/[…]+$/, ""));
+        input.spellcheck = false;
+        input.setAttribute("autocapitalize", "none");
+        input.value = value;
+        input.disabled = disabled;
+        input.oninput = () => onInput(input.value);
+        wrap.appendChild(input);
+        if (adminVariant === "1") {
+          const icon = document.createElement("span");
+          icon.className = "admin-search-icon";
+          icon.setAttribute("aria-hidden", "true");
+          icon.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>';
+          const clear = document.createElement("button");
+          clear.type = "button";
+          clear.className = "icon-button admin-search-clear";
+          clear.setAttribute("aria-label", "Clear search");
+          clear.textContent = "×";
+          clear.disabled = disabled;
+          clear.onclick = () => {
+            input.value = "";
+            onInput("");
+            input.focus();
+          };
+          wrap.append(icon, clear);
+        }
+        return wrap;
       }
       function renderTranscriptHeaderControls(onChange) {
         const controls = $("header-controls");
@@ -9802,7 +10598,10 @@
           title.className = "credential-title";
           const name = document.createElement("strong");
           name.textContent = c.name || c.slug;
-          title.append(name, badge(c.slug, "muted"));
+          const slug = document.createElement("span");
+          slug.className = "credential-slug";
+          slug.textContent = c.slug;
+          title.append(name, slug);
           const orgWide = (c.grantees || []).some((g) => g.startsWith("org:"));
           const who = orgWide ? "Organization-wide" : plural((c.grantees || []).length, "principal");
           const meta = document.createElement("div");
@@ -9891,9 +10690,16 @@
         syncScPeople();
         captureScForm();
         renderServiceCreds(serviceCredList);
-        $("card-service-credentials").scrollIntoView({ behavior: "smooth", block: "nearest" });
+        if ($("sc-dialog")) {
+          openScDialog();
+          $("sc-name").focus();
+        } else $("card-service-credentials").scrollIntoView({ behavior: "smooth", block: "nearest" });
       }
       function resetScForm() {
+        const dialog = $("sc-dialog");
+        const wasOpen = dialog?.open;
+        if (wasOpen) dialog.close();
+        scStatusHome.appendChild($("st-service-credentials"));
         $("sc-editor").classList.add("hidden");
         scAddButton.classList.remove("hidden");
         $("sc-save").classList.add("hidden");
@@ -9928,6 +10734,7 @@
         syncScPeople();
         captureScForm();
         if (serviceCredList.length) renderServiceCreds(serviceCredList);
+        if (wasOpen) scAddButton.focus();
       }
       function syncScDelivery() {
         const env = $("sc-delivery").value === "env";
@@ -10296,9 +11103,12 @@
         scAddButton.classList.add("hidden");
         $("sc-save").classList.remove("hidden");
         $("sc-reset").classList.remove("hidden");
+        openScDialog();
         $("sc-name").focus();
       };
-      $("sc-reset").onclick = resetScForm;
+      $("sc-reset").onclick = () => {
+        if (!$("st-service-credentials").classList.contains("saving")) resetScForm();
+      };
       $("sc-save").onclick = async () => {
         const body = serviceCredentialBody();
         const invalid = validateServiceCredential(body);
@@ -10982,16 +11792,45 @@
       const DESIGN_TOKENS = [
         ["--bg", "Page behind every surface"],
         ["--surface", "Cards, dialogs, table bodies"],
-        ["--subtle", "Zebra rows, inset wells"],
+        ["--subtle", "Quiet control and inset backgrounds"],
         ["--border", "Every hairline and divider"],
         ["--text", "Primary copy"],
         ["--muted", "Secondary copy and hints"],
-        ["--ink", "Primary button fill"],
+        ["--cta", "Primary actions and selected controls"],
         ["--ok", "Confirmed and healthy"],
         ["--warn", "Needs attention"],
         ["--danger", "Destructive and failed"],
         ["--trigger", "Automation and triggers"],
       ];
+
+      let twoWayToggleId = 0;
+      function twoWayToggle({ label, options, value, onChange, disabled = false }) {
+        if (options.length !== 2 || options[0].value === options[1].value)
+          throw new Error("A two-way toggle needs two distinct options.");
+        const group = document.createElement("fieldset");
+        group.className = "two-way-toggle";
+        group.disabled = disabled;
+        const legend = document.createElement("legend");
+        legend.textContent = label;
+        group.appendChild(legend);
+        const name = "two-way-toggle-" + ++twoWayToggleId;
+        options.forEach((option) => {
+          const choice = document.createElement("label");
+          const input = document.createElement("input");
+          input.type = "radio";
+          input.name = name;
+          input.value = option.value;
+          input.checked = option.value === value;
+          input.onchange = () => {
+            if (input.checked) onChange(option.value);
+          };
+          const text = document.createElement("span");
+          text.textContent = option.label;
+          choice.append(input, text);
+          group.appendChild(choice);
+        });
+        return group;
+      }
 
       function designSpec(label, note, demo, stack) {
         return (
@@ -11028,186 +11867,341 @@
         ).join("");
 
         root.innerHTML = [
-          '<p class="lead">Every control below is rendered from the same stylesheet the rest of this surface uses, so ' +
-            "this page drifts only when the design does. Copy the class names, not the markup screenshots.</p>",
-
-          designSection(
-            "Colour",
-            "Semantic tokens, not raw hex. Reach for the meaning, and light and dark stay consistent.",
-            [designSpec("Palette", "Declared on :root", '<div class="swatches">' + swatches + "</div>")],
-          ),
-
-          designSection("Typography", "One sans stack for the product, one serif for the brand lockup.", [
+          '<p class="lead">Components and page patterns from the redesigned admin portal, including Skills, Files, Sessions, Metrics, Audit, and Egress. The layout guidance describes Variant 1; switch to Original to compare controls. Examples use fictional data and do not save changes.</p>',
+          designSection("Foundations", "One palette, a small type scale, and consistent spacing.", [
             designSpec(
-              "Scale",
-              "Sizes are set per component, not by a global step scale",
-              '<div class="type-row"><h2 style="margin: 0">Section heading</h2></div>' +
-                '<div class="type-row"><p class="lead" style="margin: 0">Lead paragraph, used once at the top of a page</p></div>' +
-                '<div class="type-row"><p style="margin: 0">Body copy at the default size</p></div>' +
-                '<div class="type-row"><p class="hint" style="margin: 0">Hint text for secondary guidance</p></div>' +
-                '<div class="type-row"><span class="mono">mono for identifiers and payloads</span></div>',
+              "Semantic colors",
+              "Shared theme tokens · light and dark",
+              '<div class="swatches">' + swatches + "</div>",
+            ),
+            designSpec(
+              "Type & spacing",
+              "22px page title · 14px section title · 13px controls and copy",
+              '<div class="shell-title">Page title</div><div class="head"><h2>Section title</h2><p>Descriptions explain the setting.</p></div><label>Field label</label><p class="hint">4px label gap · 8px action gap · 24px section spacing</p>',
               true,
             ),
-            designSpec(
-              "Brand lockup",
-              "--brand-font, serif, reserved for the wordmark",
-              '<span class="brand-name" style="font-family: var(--brand-font); font-size: 19px">QM ' +
-                '<span class="brand-suffix">(admin)</span></span>',
-            ),
           ]),
-
-          designSection("Actions", "One primary per view. Everything else is secondary or a link.", [
+          designSection(
+            "Page layout",
+            "Start with the shared shell. Align titles, sections, and rows to the same content edge; use whitespace and dividers instead of enclosing cards.",
+            [
+              designSpec(
+                "Desktop and mobile",
+                "Authored layout diagrams · .admin-main → .admin-inner → .shellbar",
+                '<div class="design-layouts"><div class="design-layout-frame"><div class="design-layout-nav">Sidebar<br>Independent scroll</div><div class="design-layout-main"><div class="design-layout-content"><div class="design-layout-title">Title <span>Search / action</span></div><div class="design-layout-section">Open section<br><small>Heading + description</small></div><div class="design-layout-lines">Compact rows<br>────────────────<br>Compact rows</div></div></div></div><div class="design-layout-frame mobile"><div class="design-layout-nav">Horizontal navigation</div><div class="design-layout-main"><div class="design-layout-content"><div class="design-layout-title">Title</div><div class="design-layout-section">Full-width search</div><div class="design-layout-lines">Stacked content<br>────────────<br>Local table scroll</div></div></div></div></div>',
+                true,
+              ),
+              designSpec(
+                "Width and page padding",
+                "Current Variant 1 CSS · index.html and admin-components.css",
+                '<div class="tablewrap"><table><thead><tr><th>Rule</th><th>Desktop</th><th>Small screens</th></tr></thead><tbody><tr><td>Navigation</td><td>280px sidebar; independent scroll</td><td>Horizontal navigation at ≤900px</td></tr><tr><td>Content width</td><td>960px maximum, centered; fluid below that</td><td>Available width; min-width: 0</td></tr><tr><td>Main padding</td><td>28px top and sides</td><td>At ≤900px: 18px top, 14px sides with safe-area insets</td></tr><tr><td>Bottom clearance</td><td colspan="2">110px for the fixed Original / Variant 1 switch</td></tr><tr><td>Page heading</td><td colspan="2">22px / 500 weight; shared shell spacing 16px (activity pages use 24px)</td></tr><tr><td>Sections</td><td colspan="2">24px between artifact sections; 12px from section heading to content</td></tr><tr><td>Controls</td><td colspan="2">32px height · 6px radius · 8px gap · 4px label gap</td></tr></tbody></table></div>',
+                true,
+              ),
+              designSpec(
+                "Choose a page pattern",
+                "Live references · preserve the selected organization",
+                '<div class="design-page-links"><a href="/admin/governance?variant=1">Governance / Models</a><p>Descriptions beside settings, 40px column gap; stack on small screens. Keep Apply right-aligned with status on its left.</p><a href="/admin/skills?variant=1">Skills</a><p>Open installed-skill and skill-pack sections; compact tables and an inline registration form.</p><a href="/admin/files?variant=1">Files</a><p>Search in the header, flat upload toolbar, then scopes or files with metadata.</p><a href="/admin/history?variant=1">Sessions</a><p>Two-way sort toggle, named environments, and a separately titled conversation list.</p><a href="/admin/metrics?variant=1">Metrics</a><p>Quiet summary metrics followed by ruled report sections.</p><a href="/admin/audit?variant=1">Audit</a> · <a href="/admin/egress?variant=1">Egress</a><p>Filters above plain tables; headers stay transparent and regular-weight.</p></div>',
+                true,
+              ),
+              designSpec(
+                "Responsive behavior",
+                "Page-level rules",
+                '<ul class="design-rules"><li>At ≤900px, the sidebar becomes horizontal navigation.</li><li>At ≤640px, Skills and Files search uses the full row; dense rows allow more height and Files metadata wraps below the name.</li><li>Wide tables scroll inside .tablewrap. Never force the entire document wider than the viewport.</li><li>Keep all actions and metadata available on mobile. Use wrapping or local scrolling rather than hiding content.</li><li>Sidebar scrolling is contained; reaching its end must not scroll the main page.</li></ul>',
+                true,
+              ),
+            ],
+          ),
+          designSection(
+            "Artifact and reporting patterns",
+            "Compositions from the recent redesigns. Shared helpers render the lists; the form and report examples are local demonstrations.",
+            [
+              designSpec(
+                "Scope list",
+                "denseList() · shared Skills / Files row styles · Enter or click selects a demo row",
+                '<div id="design-scope-list"></div><p class="hint" id="design-scope-status" role="status">Choose a scope to try the row interaction.</p>',
+                true,
+              ),
+              designSpec(
+                "File list and upload toolbar",
+                "denseList() + fileThumb() · .file-upload · visual upload example, no network requests",
+                '<div class="file-upload"><div class="file-upload-main"><span class="file-upload-icon" aria-hidden="true">⇧</span><span>Upload to <strong>Example team</strong></span></div><div class="file-upload-actions"><button type="button" id="design-upload">Upload</button></div></div><div id="design-file-list"></div><p class="hint" id="design-file-status" role="status">File names, thumbnails, sizes, and dates stay visible.</p>',
+                true,
+              ),
+              designSpec(
+                "Skill-pack registration",
+                ".pack-register · shared Skills styles · local form demonstration",
+                '<div class="pack-register"><input type="url" aria-label="Example skill repository" placeholder="https://github.com/example/skills"/><button type="button" id="design-register">Register</button><button type="button" class="linkish" id="design-advanced" aria-expanded="false" aria-controls="design-pack-advanced">Advanced</button></div><div class="pack-adv hidden" id="design-pack-advanced"><div><label for="design-pack-name">Name</label><input id="design-pack-name" type="text" placeholder="Team skills"/></div><div><label for="design-pack-ref">Ref</label><input id="design-pack-ref" type="text" placeholder="main"/></div><div><label for="design-pack-path">Path</label><input id="design-pack-path" type="text" placeholder="skills/"/></div></div><p class="hint" id="design-pack-status" role="status">Registration is a local demonstration.</p>',
+                true,
+              ),
+              designSpec(
+                "Open report section",
+                "Authored Metrics / Audit / Egress composition · statline() + shared table controls",
+                '<section class="design-open-section"><h3>Activity summary</h3><p class="hint">Keep descriptions beside the section they explain.</p><div id="design-metrics-summary"></div><div class="tablewrap"><table><thead><tr><th>Scope</th><th>Requests</th><th>Status</th></tr></thead><tbody><tr><td>Example team</td><td>128</td><td><span class="badge ok">Healthy</span></td></tr><tr><td>Research</td><td>24</td><td><span class="badge muted">Idle</span></td></tr></tbody></table></div></section>',
+                true,
+              ),
+            ],
+          ),
+          designSection("Actions", "32px controls with a 6px radius. Primary actions use the dark blue accent.", [
             designSpec(
               "Buttons",
-              "button, .primary, .danger",
-              '<button class="primary" type="button">Save changes</button>' +
-                '<button type="button">Secondary</button>' +
-                '<button class="danger" type="button">Remove</button>' +
-                '<button type="button" disabled>Disabled</button>',
+              "button · .primary · .danger",
+              '<button type="button" class="primary">Apply</button><button type="button">Add item</button><button type="button" class="danger">Delete</button><button type="button" disabled>Disabled</button><button type="button" class="primary" disabled>Apply</button>',
             ),
             designSpec(
-              "Dirty state",
-              "button.dirty marks unsaved edits with a trailing asterisk",
-              '<button class="primary dirty" type="button">Apply</button>',
+              "Quiet actions",
+              ".viewlink · .icon-button",
+              '<button type="button" class="viewlink">View history ›</button><button type="button" class="icon-button" aria-label="Remove example">×</button>',
             ),
             designSpec(
-              "Links",
-              ".link for navigation, .danger-link for destructive text actions",
-              '<button class="link" type="button">Inline link</button>' +
-                '<button class="danger-link" type="button">Revoke access</button>',
-            ),
-          ]),
-
-          designSection("Status and labels", "Short, factual, colour-coded by meaning.", [
-            designSpec(
-              "Badges",
-              ".badge with ok, warn, err, info, muted, accent, admin",
-              '<span class="badge ok">Healthy</span><span class="badge warn">Degraded</span>' +
-                '<span class="badge err">Failed</span><span class="badge info">Queued</span>' +
-                '<span class="badge muted">Inactive</span><span class="badge accent">Beta</span>' +
-                '<span class="badge admin">Admin</span>',
-            ),
-            designSpec(
-              "Pills",
-              ".pill for counts and scope chips",
-              '<span class="pill">org:acme</span><span class="pill">12</span>',
-            ),
-            designSpec(
-              "Save status",
-              ".status beside the control it reports on",
-              '<span class="status ok">Saved</span><span class="status err">Save failed</span>' +
-                '<span class="status muted">No changes</span><span class="status dirty">Unsaved</span>',
-            ),
-            designSpec(
-              "Chips",
-              ".meta-chip and .identity-chip carry one fact each",
-              '<span class="meta-chip">web</span><span class="meta-chip danger">quarantined</span>' +
-                '<span class="identity-chip">person@example.com</span>',
-            ),
-          ]),
-
-          designSection("Surfaces", "Flat. Borders and spacing carry the hierarchy, never a shadow.", [
-            designSpec(
-              "Card",
-              "section.card with head, body, foot",
-              '<section class="card" style="margin: 0; width: 100%"><div class="head"><h2>Card heading</h2>' +
-                "<p>One sentence saying what this card controls.</p></div>" +
-                '<div class="body"><p style="margin: 0">Body content.</p></div>' +
-                '<div class="foot"><button class="primary" type="button">Apply</button>' +
-                '<span class="status muted">Idle</span></div></section>',
-              true,
-            ),
-            designSpec(
-              "Note",
-              ".notebox for a standing caveat",
-              '<p class="notebox" style="margin: 0">Changes here apply to every scope that inherits from this organization.</p>',
-              true,
-            ),
-            designSpec(
-              "Empty state",
-              ".empty says what is missing and what to do",
-              '<div class="empty">No credentials yet. Add one to let the agent reach this provider.</div>',
+              "Save feedback",
+              ".foot · .status · native input events",
+              '<section class="card"><div class="head"><h2>Example setting</h2><p>Edit the name to try unsaved and saved states.</p></div><div class="body"><label for="design-name">Display name</label><input id="design-name" type="text" value="Acme" /></div><div class="foot"><span class="status" id="design-status" role="status">No changes</span><button class="primary" type="button" id="design-apply" disabled>Apply</button></div></section>',
               true,
             ),
           ]),
-
-          designSection("Forms", "Label above, hint below, status next to the button that writes.", [
+          designSection(
+            "Two-way toggle",
+            "Choose one of two mutually exclusive options. Tab to focus; use arrow keys to switch.",
+            [
+              designSpec(
+                "Segmented choice",
+                "twoWayToggle({ label, options, value, onChange, disabled }) · shared radio group",
+                '<div id="design-two-way-toggle"></div><p class="hint" id="design-two-way-status" role="status">Selected: Human activity</p>',
+                true,
+              ),
+              designSpec(
+                "Disabled",
+                "The same component with disabled: true",
+                '<div id="design-two-way-disabled"></div>',
+              ),
+            ],
+          ),
+          designSection(
+            "Search",
+            "A quiet search icon, compact field, and clear action. Focus uses the shared dark blue accent.",
+            [
+              designSpec(
+                "Search field",
+                "searchField() · shared with Slack and page toolbar searches",
+                '<div id="design-search"></div><p class="hint" id="design-search-status" role="status">Type to try the search field, then clear it.</p>',
+                true,
+              ),
+              designSpec(
+                "Populated and disabled",
+                "The same component with value and disabled options",
+                '<div id="design-search-filled"></div><div id="design-search-disabled"></div>',
+                true,
+              ),
+            ],
+          ),
+          designSection("Fields", "Shared sizing, labels, hints, focus rings, validation, and disabled states.", [
             designSpec(
-              "Text input",
-              "input, select, textarea share one border and radius",
-              '<label style="display: block; width: 100%">Display name<input type="text" value="Acme" style="width: 100%" /></label>' +
-                '<p class="field-hint" style="margin: 0">Shown to everyone in the organization.</p>',
+              "Text fields",
+              "input · label · .hint",
+              '<label for="design-text">Client ID</label><input id="design-text" type="text" placeholder="Enter a client ID" aria-describedby="design-text-hint" /><p class="hint" id="design-text-hint">A label stays visible when the field has a value.</p><label for="design-number">Limit</label><input id="design-number" type="number" value="10" /><label for="design-disabled">Inherited value</label><input id="design-disabled" type="text" disabled value="Organization default" /><label for="design-invalid">Required value</label><input id="design-invalid" type="text" aria-invalid="true" aria-describedby="design-error" /><p class="status err" id="design-error">Enter a value to continue.</p>',
               true,
             ),
             designSpec(
-              "Select",
-              "Native control, styled to match",
-              "<select><option>Organization</option><option>Team</option><option>Personal</option></select>",
-            ),
-            designSpec(
-              "Toggle row",
-              ".setting-toggle with .setting-switch",
-              '<label class="setting-toggle"><input type="checkbox" checked />' +
-                '<span class="setting-switch" aria-hidden="true"></span> Require approval for shell commands</label>',
-              true,
-            ),
-          ]),
-
-          designSection("Navigation", "The sidebar owns primary navigation; these move within a page.", [
-            designSpec(
-              "Page tabs",
-              ".shell-tabs with .shell-tab",
-              '<div class="shell-tabs"><button class="shell-tab active" type="button">Conversations</button>' +
-                '<button class="shell-tab" type="button">Runs</button>' +
-                '<button class="shell-tab" type="button">Deliveries</button></div>',
+              "Dropdown",
+              "select → shared .dd accessible dropdown",
+              '<label for="design-select">Scope</label><select id="design-select"><option>Organization</option><option>Team</option><option>Personal</option></select>',
               true,
             ),
             designSpec(
-              "Segmented",
-              ".segmented with .seg for mutually exclusive modes",
-              '<div class="segmented"><button class="seg active" type="button">Rendered</button>' +
-                '<button class="seg" type="button">Raw</button></div>',
-              true,
-            ),
-          ]),
-
-          designSection("Data", "Dense by default. Numbers right-aligned, identifiers in mono.", [
-            designSpec(
-              "Table",
-              "table inside .tablewrap",
-              '<div class="tablewrap" style="width: 100%"><table><thead><tr><th>Principal</th><th>Scope</th>' +
-                "<th>Status</th></tr></thead><tbody>" +
-                '<tr><td><span class="mono">person@example.com</span></td><td>org:acme</td><td><span class="badge ok">Active</span></td></tr>' +
-                '<tr><td><span class="mono">teammate@example.com</span></td><td>team:eng</td><td><span class="badge muted">Invited</span></td></tr>' +
-                "</tbody></table></div>",
+              "Multiline",
+              "textarea · same field border and label",
+              '<label for="design-notes">Instructions</label><textarea id="design-notes" rows="3" placeholder="Write instructions…"></textarea>',
               true,
             ),
             designSpec(
-              "Metrics",
-              ".kpis with .kpi for headline numbers",
-              '<div class="kpis" style="width: 100%">' +
-                '<div class="kpi"><div class="n">1,284</div><div class="k">Turns</div></div>' +
-                '<div class="kpi"><div class="n">37</div><div class="k">Sessions</div></div>' +
-                '<div class="kpi"><div class="n">2.1s</div><div class="k">Median latency</div></div></div>',
+              "Choices",
+              ".choice-stack · .posture-choice",
+              '<div class="choice-stack"><label class="posture-choice"><input type="radio" name="design-choice" checked /><span><strong>Automatic</strong><small>Review activity when needed.</small></span></label><label class="posture-choice"><input type="radio" name="design-choice" /><span><strong>Always review</strong><small>Review every request.</small></span></label></div>',
               true,
             ),
             designSpec(
-              "Distribution",
-              ".dist rows for a share-of-total breakdown",
-              '<div class="dist" style="width: 100%">' +
-                '<div class="dist-row"><span class="dist-label">Slack</span>' +
-                '<span class="dist-track"><span class="dist-bar" style="width: 68%"></span></span>' +
-                '<span class="dist-count">68%</span></div>' +
-                '<div class="dist-row"><span class="dist-label">Web</span>' +
-                '<span class="dist-track"><span class="dist-bar" style="width: 27%"></span></span>' +
-                '<span class="dist-count">27%</span></div>' +
-                '<div class="dist-row"><span class="dist-label">Cron</span>' +
-                '<span class="dist-track"><span class="dist-bar" style="width: 5%"></span></span>' +
-                '<span class="dist-count">5%</span></div></div>',
+              "Switch & checkbox",
+              ".setting-toggle · .setting-switch · input[type=checkbox]",
+              '<label class="setting-toggle"><input type="checkbox" checked /><span class="setting-switch" aria-hidden="true"></span><span>Enable feature</span></label><label><input type="checkbox" /> Include optional details</label>',
               true,
             ),
           ]),
+          designSection(
+            "Sections & lists",
+            "Open sections separated by rules, with the same headings, descriptions, and row actions.",
+            [
+              designSpec(
+                "Settings section",
+                ".card > .head / .body / .foot",
+                '<section class="card"><div class="head"><h2>Section title</h2><p>Explain what the setting changes.</p></div><div class="body"><label for="design-section-field">Setting label</label><input id="design-section-field" type="text" value="Default value" /></div><div class="foot"><span class="status">No changes</span><button class="primary" type="button" disabled>Apply</button></div></section>',
+                true,
+              ),
+              designSpec(
+                "List row",
+                ".credential-row · .credential-title · .credential-actions",
+                '<div class="credential-row"><div class="credential-main"><div class="credential-title"><strong>Example service</strong><span class="credential-slug">example</span></div><p class="hint">Available to the organization</p></div><div class="credential-actions"><button type="button">Edit</button><button type="button" class="danger">Delete</button></div></div>',
+                true,
+              ),
+              designSpec(
+                "Model chip",
+                ".model-chip · removable item",
+                '<div class="model-chip"><span>Example model</span><button type="button" id="design-remove-chip" aria-label="Remove example model">×</button></div><span class="hint" id="design-chip-status" role="status"></span>',
+              ),
+              designSpec(
+                "Badges & feedback",
+                ".badge · .status · semantic colors",
+                '<span class="badge muted">Inherited</span><span class="badge ok">Enabled</span><span class="badge warn">Needs review</span><span class="badge err">Failed</span><span class="status ok">Saved</span><span class="status err">Save failed</span>',
+              ),
+              designSpec(
+                "Empty state",
+                ".empty",
+                '<div class="empty">No items yet. Add an item to get started.</div>',
+                true,
+              ),
+            ],
+          ),
+          designSection(
+            "Dialogs",
+            "The same controls in a focused, keyboard-accessible dialog. Escape closes it and returns focus.",
+            [
+              designSpec(
+                "Review dialog",
+                "dialog.review-dialog · shared fields and actions",
+                '<button type="button" id="design-dialog-open">Open example dialog</button><dialog class="review-dialog" id="design-dialog" aria-labelledby="design-dialog-title"><div class="review-dialog-head"><h2 id="design-dialog-title">Example dialog</h2><p>Try the shared controls without changing any settings.</p></div><div class="review-dialog-body"><label for="design-dialog-field">Display name</label><input id="design-dialog-field" type="text" value="Example" /></div><div class="review-dialog-foot"><button type="button" id="design-dialog-close">Cancel</button><button type="button" class="primary" id="design-dialog-done">Done</button></div></dialog>',
+              ),
+            ],
+          ),
+          designSection(
+            "Tables",
+            "13px cells, quiet headers, consistent padding, and scrolling inside the table on small screens.",
+            [
+              designSpec(
+                "Data table",
+                ".tablewrap > table · th · td",
+                '<div class="tablewrap"><table><thead><tr><th>Name</th><th>Access</th><th>Status</th><th>Actions</th></tr></thead><tbody><tr><td>Alex Example</td><td>Organization</td><td><span class="badge ok">Active</span></td><td><button type="button">Edit</button></td></tr><tr><td>Sam Example</td><td>Team</td><td><span class="badge muted">Invited</span></td><td><button type="button" disabled>Edit</button></td></tr></tbody></table></div>',
+                true,
+              ),
+            ],
+          ),
         ].join("");
+        const contents = document.createElement("nav");
+        contents.className = "design-contents";
+        contents.setAttribute("aria-label", "Design system sections");
+        root.querySelectorAll(".design-group").forEach((section) => {
+          const title = section.querySelector("h2").textContent;
+          section.id = "design-group-" + title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+          const link = document.createElement("a");
+          link.href = "#" + section.id;
+          link.textContent = title;
+          contents.appendChild(link);
+        });
+        root.querySelector(".lead").after(contents);
+        root.querySelectorAll(".design-page-links a").forEach((link) => {
+          const url = new URL(link.href);
+          url.searchParams.set("scope", scope);
+          link.href = url.pathname + url.search;
+        });
+        $("design-scope-list").appendChild(
+          denseList(
+            [
+              { name: "Example team", preview: "12 skills", time: "5 mins ago" },
+              { name: "Research", preview: "4 skills", time: "Yesterday" },
+            ],
+            (item) => item,
+            (item) => {
+              $("design-scope-status").textContent = "Selected: " + item.name;
+            },
+            "No skills yet.",
+          ),
+        );
+        $("design-file-list").appendChild(
+          denseList(
+            [
+              { name: "Research brief.pdf", size: "240 KB", date: "Today" },
+              { name: "Project notes.md", size: "8 KB", date: "Yesterday" },
+            ],
+            (item) => ({
+              name: item.name,
+              icon: fileThumb(item),
+              preview: "Example team",
+              time: item.size + " · " + item.date,
+            }),
+            (item) => {
+              $("design-file-status").textContent = "Selected: " + item.name + " (demo only)";
+            },
+            "No documents saved yet.",
+          ),
+        );
+        $("design-upload").onclick = () => {
+          $("design-file-status").textContent =
+            "On Files, this opens the file picker. This example does not upload files.";
+        };
+        $("design-register").onclick = () => {
+          $("design-pack-status").textContent = "Example registered locally. No repository was fetched.";
+        };
+        $("design-advanced").onclick = () => {
+          const expanded = $("design-advanced").getAttribute("aria-expanded") !== "true";
+          $("design-advanced").setAttribute("aria-expanded", String(expanded));
+          $("design-pack-advanced").classList.toggle("hidden", !expanded);
+        };
+        $("design-metrics-summary").appendChild(statline(["152 requests", "2 scopes", "Last 24 hours"]));
+        $("design-search").appendChild(
+          searchField({
+            placeholder: "Search messages…",
+            onInput: (value) => {
+              $("design-search-status").textContent = value
+                ? "Search query: " + value
+                : "Type to try the search field, then clear it.";
+            },
+          }),
+        );
+        $("design-search-filled").appendChild(
+          searchField({ placeholder: "Search messages…", value: "Product updates" }),
+        );
+        $("design-search-disabled").appendChild(searchField({ placeholder: "Search unavailable", disabled: true }));
+        const toggleOptions = [
+          { value: "human", label: "Human activity" },
+          { value: "all", label: "All activity" },
+        ];
+        $("design-two-way-toggle").appendChild(
+          twoWayToggle({
+            label: "Example activity sort",
+            options: toggleOptions,
+            value: "human",
+            onChange: (value) => {
+              $("design-two-way-status").textContent =
+                "Selected: " + toggleOptions.find((option) => option.value === value).label;
+            },
+          }),
+        );
+        $("design-two-way-disabled").appendChild(
+          twoWayToggle({
+            label: "Disabled activity sort",
+            options: toggleOptions,
+            value: "human",
+            disabled: true,
+            onChange: () => {},
+          }),
+        );
+        let savedName = "Acme";
+        $("design-name").oninput = () => {
+          const dirty = $("design-name").value !== savedName;
+          $("design-apply").disabled = !dirty;
+          $("design-status").textContent = dirty ? "Unsaved changes" : "No changes";
+        };
+        $("design-apply").onclick = () => {
+          savedName = $("design-name").value;
+          $("design-apply").disabled = true;
+          $("design-status").textContent = "Saved in this example";
+        };
+        $("design-remove-chip").onclick = () => {
+          $("design-remove-chip").closest(".model-chip").remove();
+          $("design-chip-status").textContent = "Example model removed";
+        };
+        $("design-dialog-open").onclick = () => $("design-dialog").showModal();
+        $("design-dialog-close").onclick = () => $("design-dialog").close();
+        $("design-dialog-done").onclick = () => $("design-dialog").close();
+        initCustomDropdowns(root);
         designLibraryRendered = true;
       }
 
@@ -11290,7 +12284,10 @@
           title.className = "credential-title";
           const name = document.createElement("strong");
           name.textContent = connectorName(c.provider);
-          title.append(name, badge(c.provider, "muted"));
+          const slug = document.createElement("span");
+          slug.className = "credential-slug";
+          slug.textContent = c.provider;
+          title.append(name, slug);
           const meta = document.createElement("div");
           meta.className = "hint";
           meta.textContent = c.inherited
@@ -12733,6 +13730,7 @@
       function renderMetrics(root, d) {
         const phaseSel = urlToState().phase;
         if (phaseSel) return renderPhaseDrill(root, d, phaseSel);
+        if (adminVariant === "1") defaultShell({ count: plural(d.throughput?.total ?? 0, "run") });
         renderCacheHealth(root, d);
         const phases = d.phases || [];
         root.appendChild(
@@ -12946,12 +13944,12 @@
         const total = d.total ?? errors.length;
         const limit = d.limit || ERRORS_PAGE_SIZE;
         const offset = d.offset || 0;
-        defaultShell({ count: plural(total, "error"), context: "Newest first" });
+        defaultShell({ count: plural(total, "error") });
         const rows = errors.map((e) => {
           const scopeTarget = /^(personal|channel|team|org|group):.+/.test(e.scopeLabel || "") ? e.scopeLabel : null;
           const fullText = e.message || "(no message)";
           const previewText = firstLine(fullText, 160);
-          const expandable = previewText !== fullText;
+          const expandable = adminVariant === "1" || previewText !== fullText;
           const message = document.createElement(expandable ? "details" : "div");
           message.className = "error-message";
           if (expandable) {
@@ -12968,7 +13966,7 @@
             message.textContent = fullText;
           }
           return [
-            timeCell(e.ts),
+            ...(adminVariant === "1" ? [] : [timeCell(e.ts)]),
             { text: e.category || "uncategorized" },
             { text: e.code || "—", cls: "mono" },
             nodeCell(message),
@@ -12984,10 +13982,19 @@
                   navLink("View session", { view: "history", scope: scopeTarget || scope, session: e.sessionId }),
                 )
               : { text: "—" },
+            ...(adminVariant === "1" ? [timeCell(e.ts)] : []),
           ];
         });
         const content = table(
-          ["Time", "Category", "Code", "Message", ...(all ? ["Scope"] : []), "Session"],
+          [
+            ...(adminVariant === "1" ? [] : ["Time"]),
+            "Category",
+            "Code",
+            "Message",
+            ...(all ? ["Scope"] : []),
+            "Session",
+            ...(adminVariant === "1" ? ["Time"] : []),
+          ],
           rows,
           all ? "No errors recorded." : "No errors recorded for this scope.",
         );
@@ -13103,10 +14110,10 @@
         defaultShell({
           stats: [
             [String(d.total ?? recs.length), "Calls"],
-            [String(d.denied ?? 0), "Denied"],
+            [String(d.denied ?? 0), "denied requests"],
             [String(d.hosts ?? 0), "Hosts"],
-            [String(bs.broker ?? 0), "Broker"],
-            [String(bs.firewall ?? 0), "Firewall"],
+            [String(bs.broker ?? 0), "broker requests"],
+            [String(bs.firewall ?? 0), "firewall requests"],
           ],
         });
         const rows = recs.map((r) => [
@@ -13619,7 +14626,7 @@
           (a, b) => (b.lastAccessAt || b.createdAt || 0) - (a.lastAccessAt || a.createdAt || 0),
         );
         const deployments = orgOwnView() ? allDeps.filter((dep) => scopeKind(dep.ownerScopeId) === "org") : allDeps;
-        const count = deployments.length ? plural(deployments.length, "app") : "";
+        const count = plural(deployments.length, "app");
         const previewOf = (dep) =>
           [
             titleCase(dep.status || "unknown"),
@@ -13855,7 +14862,7 @@
           },
           placeholder: index ? "Search all skills…" : "Search skills…",
         });
-        const card = bareDataCard(tableWrap);
+        const card = adminVariant === "1" ? dataCard("Installed skills", "", tableWrap) : bareDataCard(tableWrap);
         if (scopeWrap) card.querySelector(".body").prepend(scopeWrap);
         root.appendChild(card);
         root.appendChild(detail);
@@ -14257,7 +15264,11 @@
           ];
         });
         box.appendChild(table(["Pack", "Skills", "Trust", "Status", ""], rows, "No packs yet. Register one above."));
-        root.appendChild(bareDataCard(box));
+        root.appendChild(
+          adminVariant === "1"
+            ? dataCard("Skill packs", "Register a repository, then choose which skills to import into each scope.", box)
+            : bareDataCard(box),
+        );
         root.appendChild(detail);
       }
 
@@ -14775,11 +15786,13 @@
             title: orgWideView() ? "Org-wide" : shortName(scope),
           });
         }
+        const redesigned = adminVariant === "1";
         const server = d.content || "";
         const wrap = document.createElement("div");
         const ta = document.createElement("textarea");
         ta.id = "memory-text";
         ta.spellcheck = false;
+        ta.setAttribute("aria-label", "Notebook contents");
         ta.value = memDraft !== null && memDraftScope === scope ? memDraft : server;
         ta.style.minHeight = "340px";
         ta.style.fontFamily = "ui-monospace, SFMono-Regular, Menlo, monospace";
@@ -14818,9 +15831,26 @@
         };
         foot.append(save, st);
         wrap.append(ta, foot);
-        root.appendChild(bareDataCard(wrap));
+        if (redesigned) {
+          const label = document.createElement("label");
+          label.htmlFor = "memory-text";
+          label.textContent = "Notebook contents";
+          wrap.prepend(label);
+          st.setAttribute("role", "status");
+          const card = dataCard(
+            "Notebook",
+            "What the agent remembers in this scope. Changes apply when you save.",
+            wrap,
+          );
+          card.classList.add("memory-editor");
+          root.appendChild(card);
+        } else root.appendChild(bareDataCard(wrap));
       }
       function renderMemoryIndex(root, d) {
+        const redesigned = adminVariant === "1";
+        let query = "";
+        const list = document.createElement("div");
+        if (redesigned) list.className = "memory-notebooks";
         const scopes = (d.scopes || []).filter((s) => s.hasMemory || scopeKind(s.scopeId) === "org");
         const written = scopes.filter((s) => s.hasMemory);
         const hasTimestamps = written.some((s) => s.updatedAt);
@@ -14837,25 +15867,56 @@
           );
         pageShell({
           title: VIEW_TITLE.memory,
-          count: written.length ? plural(written.length, "notebook") : "",
+          count: redesigned
+            ? plural(written.length, "notebook")
+            : written.length
+              ? plural(written.length, "notebook")
+              : "",
+          ...(redesigned
+            ? {
+                search: {
+                  placeholder: "Search notebooks…",
+                  onInput: (value) => {
+                    query = value.trim().toLowerCase();
+                    draw();
+                  },
+                },
+              }
+            : {}),
           context: written.length && !hasTimestamps ? "sorted by size (this backend keeps no edit history)" : "",
         });
-        const t = denseList(
-          scopes,
-          (s) => ({
-            name: scopeKind(s.scopeId) === "org" ? "org" : s.label || shortName(s.scopeId),
-            preview: s.hasMemory ? fmtBytes(s.bytes || 0) : "empty",
-            time: s.updatedAt ? relTime(s.updatedAt) : "Never",
-            href: stateToUrl(
-              scopeKind(s.scopeId) === "org"
-                ? { view: "memory", scope: s.scopeId, mem: "edit" }
-                : { view: "memory", scope: s.scopeId },
-            ),
-          }),
-          openScope,
-          "No notebooks yet. The agent hasn't remembered anything.",
-        );
-        root.appendChild(bareDataCard(t));
+        const draw = () => {
+          const visible = scopes.filter(
+            (s) => !query || [s.label, shortName(s.scopeId), s.scopeId].join(" ").toLowerCase().includes(query),
+          );
+          const t = denseList(
+            visible,
+            (s) => ({
+              name: scopeKind(s.scopeId) === "org" ? "org" : s.label || shortName(s.scopeId),
+              preview: s.hasMemory ? fmtBytes(s.bytes || 0) : "empty",
+              time: s.updatedAt ? relTime(s.updatedAt) : "Never",
+              href: stateToUrl(
+                scopeKind(s.scopeId) === "org"
+                  ? { view: "memory", scope: s.scopeId, mem: "edit" }
+                  : { view: "memory", scope: s.scopeId },
+              ),
+            }),
+            openScope,
+            query ? "No notebooks match your search." : "No notebooks yet. The agent hasn't remembered anything.",
+          );
+          if (redesigned) {
+            const headings = document.createElement("div");
+            headings.className = "memory-columns";
+            for (const text of ["Notebook", "Size", "Last updated"]) {
+              const label = document.createElement("span");
+              label.textContent = text;
+              headings.appendChild(label);
+            }
+            list.replaceChildren(headings, t);
+          } else list.replaceChildren(bareDataCard(t));
+        };
+        draw();
+        root.appendChild(list);
       }
       function renderRetention(root, d) {
         const a = d.active || {};
@@ -15212,6 +16273,13 @@
         drawLists();
       }
       function renderUsers(root, d) {
+        const redesigned = adminVariant === "1";
+        if (redesigned) {
+          const layout = document.createElement("div");
+          layout.className = "users-layout";
+          root.appendChild(layout);
+          root = layout;
+        }
         const users = d.users || [];
         const grants = d.grants || [];
         const externalUsers = d.externalUsers || [];
@@ -15245,6 +16313,8 @@
           f.className = "f" + (cls ? " " + cls : "");
           const l = document.createElement("label");
           l.textContent = labelText;
+          control.id = "users-" + labelText.toLowerCase().replaceAll(" ", "-");
+          l.htmlFor = control.id;
           f.append(l, control);
           return f;
         };
@@ -15278,6 +16348,7 @@
         st.id = "st-users";
         st.style.margin = "10px 0 0";
         formCard.querySelector(".body").appendChild(st);
+        if (redesigned) formCard.classList.add("users-setting");
         root.appendChild(formCard);
 
         const impForm = document.createElement("div");
@@ -15352,6 +16423,7 @@
         impSt.id = "st-imp";
         impSt.style.margin = "10px 0 0";
         impCard.querySelector(".body").append(impDatalist, impSt);
+        if (redesigned) impCard.classList.add("users-setting");
         root.appendChild(impCard);
 
         const inviteEmail = d.inviteEmail || {};
@@ -15431,7 +16503,7 @@
         const addBtn = document.createElement("button");
         addBtn.type = "button";
         addBtn.className = "rowbtn";
-        addBtn.textContent = "+";
+        addBtn.textContent = redesigned ? "+ Add external user" : "+";
         addBtn.title = "Add external user";
         addBtn.setAttribute("aria-label", "Add external user");
         addBtn.setAttribute("aria-expanded", "false");
@@ -15447,7 +16519,8 @@
 
         const lists = document.createElement("div");
         lists.className = "list-root";
-        root.appendChild(lists);
+        if (redesigned) root.prepend(lists);
+        else root.appendChild(lists);
         const orgAdminCount = grants.filter((g) => g.role === "org_admin").length;
         const matches = (parts) => parts.join(" ").toLowerCase().includes(filterVal.trim().toLowerCase());
         const drawLists = () => {
@@ -15525,10 +16598,14 @@
             "Everyone who has used the agent — click a row for their activity, artifacts, and config.",
             roster,
           );
-          usersCard.querySelector(".head h2").append(" ", addBtn);
+          if (redesigned) {
+            usersCard.classList.add("users-roster");
+            usersCard.querySelector(".head").appendChild(addBtn);
+          } else usersCard.querySelector(".head h2").append(" ", addBtn);
           usersCard.querySelector(".body").prepend(invite);
           usersCard.querySelector(".body").appendChild(externalSt);
-          lists.appendChild(usersCard);
+          if (redesigned) lists.prepend(usersCard);
+          else lists.appendChild(usersCard);
 
           const external = actionTable(
             ["Email", "Role", "Expires", "Invited by", "Status", ""],
@@ -15547,7 +16624,9 @@
             ],
             externalUsers.length
               ? "No external users match."
-              : "No external users. Use + on the Users card to invite one.",
+              : redesigned
+                ? "No external users yet. Add an external user to invite a collaborator."
+                : "No external users. Use + on the Users card to invite one.",
           );
           lists.appendChild(
             dataCard(
@@ -16065,7 +17144,7 @@
         const sortLabel = document.createElement("span");
         sortLabel.className = "shell-sort-label";
         sortLabel.textContent = "Sort:";
-        const seg = document.createElement("div");
+        let seg = document.createElement("div");
         seg.className = "segmented";
         const sortOpt = (value, label) => {
           const b = document.createElement("button");
@@ -16082,12 +17161,25 @@
         };
         sortOpt("human", "Human activity");
         sortOpt("all", "All activity");
+        if (adminVariant === "1") {
+          seg = twoWayToggle({
+            label: "Sort sessions",
+            options: [
+              { value: "human", label: "Human activity" },
+              { value: "all", label: "All activity" },
+            ],
+            value: scopeSort,
+            onChange: (value) => {
+              scopeSort = value;
+              renderScopeIndex();
+              $("shellbar").querySelector(".two-way-toggle input:checked")?.focus({ preventScroll: true });
+            },
+          });
+        }
         sortControl.append(sortLabel, seg);
         pageShell({
           title: VIEW_TITLE.history,
-          count: activeRows.length
-            ? activeRows.length + (activeRows.length === 1 ? " active scope" : " active scopes")
-            : "",
+          count: plural(activeRows.length, "active scope"),
           actions: [sortControl],
         });
         const activityTime = (s) => (scopeSort === "human" ? s.lastConversationActivity || 0 : s.lastActivity || 0);
@@ -16146,7 +17238,9 @@
           (s) => selectScope(s.scopeId),
           rows.length ? "No conversations yet." : "No scopes yet. Nobody has talked to the agent.",
         );
-        root.appendChild(bareDataCard(t));
+        root.appendChild(
+          adminVariant === "1" ? dataCard("Conversations by person or channel", "", t) : bareDataCard(t),
+        );
         if (quietRows.length) {
           const quiet = document.createElement("details");
           quiet.className = "history-quiet";
@@ -17079,7 +18173,8 @@
       function slackAvatar(m) {
         const av = document.createElement("span");
         av.className = "sm-avatar";
-        av.style.background = "hsl(" + slackHashHue(m.authorId || m.authorName || "?") + " 52% 42%)";
+        if (adminVariant !== "1")
+          av.style.background = "hsl(" + slackHashHue(m.authorId || m.authorName || "?") + " 52% 42%)";
         av.textContent = (slackAuthorLabel(m).trim()[0] || "?").toUpperCase();
         return av;
       }
@@ -17119,7 +18214,10 @@
 
       function slackAppendMrkdwn(raw, parent) {
         const text = slackUnescape(raw);
-        const re = /\*([^*\n]+)\*|(?<!\w)_([^_\n]+)_(?!\w)|~([^~\n]+)~/g;
+        const re =
+          adminVariant === "1"
+            ? /\*([^*\n]+)\*|(?<!\w)_([^_\n]+)_(?!\w)|~([^~\n]+)~|(https?:\/\/[^\s<>]+)/g
+            : /\*([^*\n]+)\*|(?<!\w)_([^_\n]+)_(?!\w)|~([^~\n]+)~/g;
         let last = 0,
           m;
         while ((m = re.exec(text))) {
@@ -17131,9 +18229,18 @@
           } else if (m[2] != null) {
             el = document.createElement("em");
             el.textContent = m[2];
-          } else {
+          } else if (m[3] != null) {
             el = document.createElement("s");
             el.textContent = m[3];
+          } else {
+            let url = m[4].replace(/[.,;!?]+$/, "");
+            while (url.endsWith(")") && (url.match(/\)/g) || []).length > (url.match(/\(/g) || []).length)
+              url = url.slice(0, -1);
+            el = slackEntityNode(url);
+            parent.appendChild(el);
+            parent.appendChild(document.createTextNode(m[4].slice(url.length)));
+            last = re.lastIndex;
+            continue;
           }
           parent.appendChild(el);
           last = re.lastIndex;
@@ -17170,6 +18277,22 @@
             code.textContent = slackUnescape(part.replace(/^\n/, "").replace(/\n$/, ""));
             pre.appendChild(code);
             frag.appendChild(pre);
+          } else if (adminVariant === "1") {
+            let quote = null;
+            part.split("\n").forEach((line, lineIndex) => {
+              const quoted = /^(?:>|&gt;) ?/.test(line);
+              if (quoted) {
+                if (!quote) {
+                  quote = document.createElement("blockquote");
+                  frag.appendChild(quote);
+                } else quote.appendChild(document.createTextNode("\n"));
+                slackParseInline(line.replace(/^(?:>|&gt;) ?/, ""), quote, mentions);
+              } else {
+                if (lineIndex && !quote) frag.appendChild(document.createTextNode("\n"));
+                quote = null;
+                slackParseInline(line, frag, mentions);
+              }
+            });
           } else {
             slackParseInline(part, frag, mentions);
           }
@@ -17237,7 +18360,7 @@
           if (m.sub && m.sub !== m.ts) {
             const t = document.createElement("span");
             t.className = "sm-tag";
-            t.textContent = "↳ thread";
+            t.textContent = adminVariant === "1" ? "Thread reply" : "↳ thread";
             t.title = "Reply in the thread rooted at " + m.sub;
             head.appendChild(t);
           }
@@ -17249,7 +18372,10 @@
           }
           const when = document.createElement("span");
           when.className = "sm-when";
-          when.textContent = relTime(m.createdAt);
+          when.textContent =
+            adminVariant === "1" && view === "slack" && !opts.onOpen
+              ? new Date(m.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+              : relTime(m.createdAt);
           when.title = fmtTime(m.createdAt) + " · ts " + m.ts;
           head.appendChild(when);
           body.appendChild(head);
@@ -17334,7 +18460,9 @@
           const containers = slackContainers || [];
           pageShell({
             title: "Slack",
-            count: slackContainersTruncated ? containers.length.toLocaleString() + "+" : containers.length,
+            count:
+              (slackContainersTruncated ? containers.length.toLocaleString() + "+" : containers.length) +
+              " conversations",
             search: slackSearchBox(null),
           });
           root.appendChild(
@@ -17343,9 +18471,9 @@
               (c) => {
                 const meta = slackContainerMeta(c.container);
                 return {
-                  icon: meta.icon,
-                  name: meta.name,
-                  preview: `${Number(c.messageCount).toLocaleString()} mirrored · ${(c.members || []).length} members`,
+                  icon: adminVariant === "1" ? null : meta.icon,
+                  name: adminVariant === "1" ? meta.label : meta.name,
+                  preview: `${Number(c.messageCount).toLocaleString()} mirrored · ${plural((c.members || []).length, "member")}`,
                   time: relTime(c.updatedAt),
                   href: stateToUrl({ view: "slack", container: c.container }),
                 };
@@ -17375,6 +18503,17 @@
             ...(scopeGo ? [navLink("Governance →", { view: "governance", scope: scopeGo, session: null })] : []),
           ],
         });
+        if (adminVariant === "1") {
+          const bar = $("shellbar");
+          const toolbar = document.createElement("div");
+          toolbar.className = "sm-toolbar";
+          toolbar.append(bar.querySelector(".back"), ...bar.querySelectorAll(".link"));
+          const heading = document.createElement("div");
+          heading.className = "sm-channel-heading";
+          heading.append(bar.querySelector(".shell-title"), bar.querySelector(".shell-context"));
+          bar.querySelector(".shell-spacer")?.remove();
+          bar.prepend(toolbar, heading);
+        }
         const loading = document.createElement("div");
         loading.className = "loadingline";
         loading.textContent = "Loading messages...";
@@ -17412,8 +18551,11 @@
         rawLink.rel = "noopener";
         rawLink.textContent = "Raw feed ↗";
         rawLink.title = "Open the raw mirrored JSON rows for this container in a new tab";
-        rawFeed.appendChild(rawLink);
-        root.appendChild(rawFeed);
+        if (adminVariant === "1") $("shellbar").querySelector(".sm-toolbar").appendChild(rawLink);
+        else {
+          rawFeed.appendChild(rawLink);
+          root.appendChild(rawFeed);
+        }
         const stream = document.createElement("div");
         stream.className = "sm-stream";
         const dayOf = (m) => new Date(m.createdAt).toDateString();
@@ -17601,7 +18743,7 @@
           prev.className = "badges";
           prev.appendChild(judgmentBadge(j.decision));
           const txt = document.createElement("span");
-          txt.className = "pill";
+          txt.className = "pill judgment-reason";
           txt.textContent = j.reason || (j.decision === "fastlane" ? "@mention, routed past the judge" : "None");
           prev.appendChild(txt);
           if (j.latencyMs != null) {
