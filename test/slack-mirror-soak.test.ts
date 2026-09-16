@@ -241,7 +241,7 @@ test("shadow compares canonical mention IDs without erasing literal entity or at
   assert.equal(result.liveMessagesMissingFromStorage, 0);
 });
 
-test("mirror selects channel roots and retains newest thread replies", async () => {
+test("mirror selects newest channel roots and the first thread page", async () => {
   const { createMemorySurfaceCache } = await import("../src/surface-cache/surface-cache.ts");
   const cache = createMemorySurfaceCache();
   const ts = (n: number) => String(n).padStart(6, "0");
@@ -261,10 +261,10 @@ test("mirror selects channel roots and retains newest thread replies", async () 
   const thread = await read({}, "C1", ts(204));
   assert.equal(thread.raw.length, 200);
   assert.equal(thread.raw[0]?.ts, ts(204));
-  assert.equal(thread.raw.at(-1)?.ts, ts(549));
+  assert.equal(thread.raw.at(-1)?.ts, ts(498));
   const expanded = await read({}, "C1", undefined, undefined, true);
   assert.equal(expanded.raw.length, 399);
-  assert.equal(expanded.raw.at(-1)?.ts, ts(549));
+  assert.equal(expanded.raw.at(-1)?.ts, ts(498));
 });
 
 test("shadow never certifies failed or truncated live thread expansion as complete", async (t) => {
@@ -303,7 +303,7 @@ test("shadow never certifies failed or truncated live thread expansion as comple
   }
 });
 
-test("shadow measures the same recent long-thread selection as mirror without fallback", async (t) => {
+test("shadow and mirror use the live first-page thread contract without fallback", async (t) => {
   const logs: string[] = [];
   t.mock.method(console, "info", (line: string) => logs.push(line));
   const cache = createMemorySurfaceCache();
@@ -333,7 +333,7 @@ test("shadow measures the same recent long-thread selection as mirror without fa
   const mirrored = await createSlackHistoryReader({ core, ids, source: "mirror" })(client, "C1", "1000.000000");
   assert.deepEqual(
     mirrored.raw.map((message) => message.ts),
-    [messages[0]!, ...messages.slice(-199)].map((message) => message.ts),
+    messages.slice(0, 200).map((message) => message.ts),
   );
   const live = await createSlackHistoryReader({ core, ids, source: "shadow" })(client, "C1", "1000.000000");
   assert.deepEqual(live.raw, messages.slice(0, 200));
@@ -341,9 +341,9 @@ test("shadow measures the same recent long-thread selection as mirror without fa
   const comparison = JSON.parse(logs[0]!);
   assert.equal(comparison.liveMessages, 200);
   assert.equal(comparison.mirroredMessages, 200);
-  assert.equal(comparison.liveMessagesMissingFromMirror, 20);
-  assert.equal(comparison.mirrorMessagesOutsideLiveWindow, 20);
-  assert.equal(comparison.matchingMessages, 180);
+  assert.equal(comparison.liveMessagesMissingFromMirror, 0);
+  assert.equal(comparison.mirrorMessagesOutsideLiveWindow, 0);
+  assert.equal(comparison.matchingMessages, 200);
   assert.equal(comparison.liveComplete, false);
   await cache.close();
 });
