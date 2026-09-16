@@ -738,7 +738,12 @@ export async function awsMigrateCandidate(config: QmConfig, configDir: string, c
   });
 }
 
-async function runAwsCandidateMigration(config: QmConfig, coreImage: string, label: string): Promise<void> {
+async function runAwsCandidateMigration(
+  config: QmConfig,
+  coreImage: string,
+  label: string,
+  existingTaskDefinition?: string,
+): Promise<void> {
   const aws = requireAws(config);
   const spec = aws.services.core;
   if (!spec) throw new CliError("AWS migrations require the core workload");
@@ -762,13 +767,17 @@ async function runAwsCandidateMigration(config: QmConfig, coreImage: string, lab
   const temp = mkdtempSync(join(tmpdir(), "qm-migration-task-"));
   let taskDefinition: string | undefined;
   try {
-    const definitionPath = join(temp, "core.json");
-    const definition = renderTaskDefinition(config, "core", coreImage, secretArns(config));
-    const container = definition.containerDefinitions.find((candidate) => candidate.name === "core");
-    if (!container) throw new CliError("AWS migration task definition has no core container");
-    delete container.healthCheck;
-    writeFileSync(definitionPath, JSON.stringify(definition));
-    taskDefinition = registerTaskDefinition(config, definitionPath);
+    if (existingTaskDefinition) {
+      taskDefinition = existingTaskDefinition;
+    } else {
+      const definitionPath = join(temp, "core.json");
+      const definition = renderTaskDefinition(config, "core", coreImage, secretArns(config));
+      const container = definition.containerDefinitions.find((candidate) => candidate.name === "core");
+      if (!container) throw new CliError("AWS migration task definition has no core container");
+      delete container.healthCheck;
+      writeFileSync(definitionPath, JSON.stringify(definition));
+      taskDefinition = registerTaskDefinition(config, definitionPath);
+    }
     header(`qm migrate — ${config.orgId} (AWS candidate ${label})`);
     const started = awsJson<{
       tasks?: Array<{ taskArn?: string }>;
@@ -815,7 +824,7 @@ async function runAwsCandidateMigration(config: QmConfig, coreImage: string, lab
     }
     ok(`candidate ${label} migrations applied`);
   } finally {
-    if (taskDefinition) {
+    if (taskDefinition && !existingTaskDefinition) {
       try {
         awsText(aws, ["ecs", "deregister-task-definition", "--task-definition", taskDefinition]);
       } catch (error) {
@@ -2153,10 +2162,6 @@ export async function awsUp(config: QmConfig, _configDir: string, opts: AwsUpOpt
     if (aws.predeployDbSnapshot === false)
       note("pre-deploy database restore point: disabled (aws.predeployDbSnapshot)");
     else dbRestorePoint = assertPredeployDbRestorePoint(config);
-    if (candidate?.images.core && services.includes("core")) {
-      await runAwsCandidateMigration(config, candidate.images.core, candidate.label);
-      migratedCandidate = true;
-    }
     if (current?.layer) {
       desiredLayer = current.layer;
     } else {
@@ -2226,6 +2231,10 @@ export async function awsUp(config: QmConfig, _configDir: string, opts: AwsUpOpt
       writeFileSync(file, JSON.stringify(item.task));
       const taskDefinition = registerTaskDefinition(config, file);
       targets[item.service] = taskDefinition;
+    }
+    if (candidate?.images.core && services.includes("core")) {
+      await runAwsCandidateMigration(config, candidate.images.core, candidate.label, targets.core!);
+      migratedCandidate = true;
     }
     const rolloutTargets = Object.fromEntries(
       services
